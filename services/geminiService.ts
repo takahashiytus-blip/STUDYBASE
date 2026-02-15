@@ -3,17 +3,14 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// AI Responses are often clean JSON when responseMimeType is set, but this helper ensures robustness
 const extractJson = (text: string) => {
   try {
     let jsonStr = text.trim();
     if (jsonStr.startsWith('```')) {
       jsonStr = jsonStr.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
     }
-    
     const firstBracket = jsonStr.indexOf('[');
     const firstBrace = jsonStr.indexOf('{');
-    
     let targetJson = jsonStr;
     if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
       const match = jsonStr.match(/\[[\s\S]*\]/);
@@ -22,7 +19,6 @@ const extractJson = (text: string) => {
       const match = jsonStr.match(/\{[\s\S]*\}/);
       if (match) targetJson = match[0];
     }
-    
     return JSON.parse(targetJson);
   } catch (e) {
     console.error("JSON Parse Error:", text, e);
@@ -40,14 +36,7 @@ export const generateProfessionalReport = async (
   const prompt = `
     学習塾の指導報告書と週間計画を作成してください。
     【入力データ】生徒: ${studentName}, 科目: ${subject}, 指導メモ: ${rawNotes}, 宿題: ${homeworkAssigned}
-    
-    【重要制約】
-    weeklyPlan（週間学習計画）は、必ず「1日目」から「7日目」までの7日間分を日割りで作成してください。
-    各行は必ず「1日目：具体的な内容」という形式から始め、改行して出力してください。
-    例：
-    1日目：単語帳 p.10-20
-    2日目：文法問題集 第3章
-    ...
+    【重要】weeklyPlan（週間学習計画）は必ず「1日目」から「7日目」までの7日間分を日割りで作成し、各行を「1日目：具体的な内容」という形式で出力してください。
   `;
 
   try {
@@ -73,6 +62,19 @@ export const generateProfessionalReport = async (
     return extractJson(response.text || "");
   } catch (error) {
     throw error;
+  }
+};
+
+export const generateLearningAdvice = async (studentName: string, weeklyHours: string) => {
+  const prompt = `生徒 ${studentName} さんの今週の学習時間は ${weeklyHours} 時間です。学習状況に基づいた、モチベーションが上がる短い一言アドバイス（50文字以内）を生成してください。`;
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
+    return response.text?.trim() || "継続は力なり。今日も一歩進みましょう。";
+  } catch (error) {
+    return "一歩ずつの積み重ねが、大きな成果につながります。";
   }
 };
 
@@ -130,19 +132,4 @@ export const generateInterviewMaterial = async (
     },
   });
   return extractJson(response.text || "");
-};
-
-// Fix: Added generateLearningAdvice function for Dashboard to provide personalized tips
-export const generateLearningAdvice = async (studentName: string, weeklyHours: string) => {
-  const prompt = `生徒 ${studentName} さんの今週の学習時間は ${weeklyHours} 時間です。学習状況に基づいた、モチベーションが上がる短い一言アドバイス（50文字以内）を生成してください。`;
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-    });
-    return response.text?.trim() || "継続は力なり。今日も一歩進みましょう。";
-  } catch (error) {
-    console.error("Failed to generate advice:", error);
-    return "一歩ずつの積み重ねが、大きな成果につながります。";
-  }
 };
