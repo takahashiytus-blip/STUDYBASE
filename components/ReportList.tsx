@@ -39,11 +39,20 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
 
   const renderWeeklyTimeline = (text: string) => {
     if (!text) return null;
-    let lines = text.replace(/\\n/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    
+    // 改行コード（本物）と文字列としての「\n」の両方を処理
+    const normalizedText = text.replace(/\\n/g, '\n');
+    let lines = normalizedText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    
+    // もし1行も「日目」が含まれない場合、単純なテキストとして表示
+    if (!lines.some(l => l.includes('日目'))) {
+      return <p className="text-indigo-50 font-bold whitespace-pre-wrap">{normalizedText}</p>;
+    }
+
     const dailySteps = Array.from({ length: 7 }, (_, i) => {
       const dayLabel = `${i + 1}日目`;
       const foundLine = lines.find(l => l.includes(dayLabel));
-      let content = foundLine ? foundLine.replace(new RegExp(`^${dayLabel}[:：\\s]*`), "").trim() : "復習に取り組みましょう。";
+      let content = foundLine ? foundLine.replace(new RegExp(`^.*?${dayLabel}[:：\\s]*`), "").trim() : "復習に取り組みましょう。";
       return { label: dayLabel, content };
     });
 
@@ -52,7 +61,7 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
         {dailySteps.map((step, idx) => (
           <div key={idx} className="relative pl-8 pb-8 last:pb-2 group">
             <div className="absolute left-0 top-2 bottom-0 w-px bg-indigo-500/20 group-last:hidden"></div>
-            <div className="absolute left-[-4px] top-2 w-2 h-2 rounded-full bg-indigo-500 shadow-md"></div>
+            <div className="absolute left-[-4px] top-2 w-2 h-2 rounded-full bg-indigo-50 shadow-md"></div>
             <div className="flex flex-col md:flex-row md:items-baseline md:gap-4">
               <span className="text-indigo-400 font-black text-[10px] uppercase tracking-widest shrink-0 whitespace-nowrap mb-1 md:mb-0">{step.label}</span>
               <span className="text-[14px] font-bold text-indigo-50 leading-relaxed group-hover:text-white transition-colors">{step.content}</span>

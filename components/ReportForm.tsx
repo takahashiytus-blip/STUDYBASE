@@ -24,7 +24,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, onSave }) => {
   const years = Array.from({ length: 2125 - 2025 + 1 }, (_, i) => 2025 + i);
   const seasonalOptions = ['春期講習', '夏期講習', '冬期講習', '追加'];
 
-  // 共通の入力スタイル
   const inputBaseStyle = "w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 font-bold placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all";
 
   const handleGenerate = async () => {
@@ -43,6 +42,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, onSave }) => {
         homeworkAssigned,
         typeof quizScore === 'number' ? quizScore : undefined
       );
+      
+      // 改行コードの正規化
+      if (content.weeklyPlan) {
+        content.weeklyPlan = content.weeklyPlan.replace(/\\n/g, '\n');
+      }
+      
       setGeneratedPreview(content);
     } catch (error) {
       alert('AIレポートの生成に失敗しました。時間をおいて再度お試しください。');

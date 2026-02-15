@@ -27,11 +27,7 @@ const App: React.FC = () => {
   ]);
 
   const [state, setState] = useState<AppState>({
-    currentUser: {
-      role: 'student',
-      id: '',
-      name: ''
-    },
+    currentUser: { role: 'student', id: '', name: '' },
     students: MOCK_STUDENTS,
     instructors: MOCK_INSTRUCTORS,
     reports: MOCK_REPORTS.map(r => ({ ...r, messages: [], needsAction: false })),
@@ -231,7 +227,6 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       instructors: prev.instructors.filter(i => i.id !== instructorId),
-      // 生徒の担当リストからも削除
       students: prev.students.map(s => ({
         ...s,
         instructorIds: s.instructorIds.filter(id => id !== instructorId)
@@ -270,7 +265,6 @@ const App: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 relative overflow-hidden">
-        {/* Animated Background */}
         <div className="absolute top-0 left-0 w-full h-full opacity-30 pointer-events-none">
           <div className="absolute -top-24 -left-24 w-[600px] h-[600px] bg-indigo-500/20 rounded-full blur-[120px]"></div>
           <div className="absolute top-1/2 -right-24 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-[100px]"></div>
@@ -278,16 +272,12 @@ const App: React.FC = () => {
 
         <div className="max-w-4xl w-full relative z-10">
           <div className="text-center mb-16 animate-fadeIn">
-            <div className="inline-flex flex-col items-center">
-              <h1 className="text-white text-7xl font-light tracking-tighter mb-2 flex items-center">
-                Study
-                <span className="font-black bg-clip-text text-transparent bg-gradient-to-br from-indigo-300 via-white to-indigo-500 ml-1">
-                  Base
-                </span>
-                <span className="w-2 h-2 bg-indigo-500 rounded-full ml-1 self-end mb-3"></span>
-              </h1>
-              <div className="h-0.5 w-32 bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent"></div>
-            </div>
+            <h1 className="text-white text-7xl font-light tracking-tighter mb-2 flex items-center justify-center">
+              Study
+              <span className="font-black bg-clip-text text-transparent bg-gradient-to-br from-indigo-300 via-white to-indigo-500 ml-1">
+                Base
+              </span>
+            </h1>
             <p className="text-slate-400 text-lg font-medium mt-6 tracking-wide opacity-80">最高効率の次世代学習管理プラットフォーム</p>
           </div>
 
@@ -315,16 +305,7 @@ const App: React.FC = () => {
           ) : (
             <div className="max-w-md mx-auto bg-white/5 backdrop-blur-xl border border-white/10 p-10 rounded-[2.5rem] animate-slideUp shadow-2xl">
               <div className="flex justify-between items-center mb-8">
-                <h2 className="text-white text-xl font-black flex items-center gap-3">
-                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-lg ${
-                    selectedRoleForLogin === 'admin' ? 'bg-slate-600' : 'bg-indigo-500'
-                  }`}>
-                    {selectedRoleForLogin === 'admin' ? '🏢' : 
-                     selectedRoleForLogin === 'instructor' ? '👨‍🏫' :
-                     selectedRoleForLogin === 'parent' ? '🏠' : '🎒'}
-                  </span>
-                  Sign in
-                </h2>
+                <h2 className="text-white text-xl font-black flex items-center gap-3">Sign in</h2>
                 <button 
                   onClick={() => { setSelectedRoleForLogin(null); setAuthError(''); setLoginAuth({id: '', password: ''}); }}
                   className="text-slate-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest"
@@ -342,8 +323,7 @@ const App: React.FC = () => {
                     autoFocus
                     value={loginAuth.id}
                     onChange={(e) => setLoginAuth({ ...loginAuth, id: e.target.value })}
-                    className="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:border-indigo-500 focus:bg-white/10 outline-none text-white font-bold transition-all"
-                    placeholder="Enter ID"
+                    className="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:border-indigo-500 outline-none text-white font-bold"
                   />
                 </div>
                 <div>
@@ -353,26 +333,16 @@ const App: React.FC = () => {
                     required
                     value={loginAuth.password}
                     onChange={(e) => setLoginAuth({ ...loginAuth, password: e.target.value })}
-                    className="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:border-indigo-500 focus:bg-white/10 outline-none text-white font-bold transition-all"
-                    placeholder="Enter Password"
+                    className="w-full px-5 py-4 rounded-xl bg-white/5 border border-white/10 focus:border-indigo-500 outline-none text-white font-bold"
                   />
                 </div>
-                
-                {authError && (
-                  <p className="text-rose-400 text-xs font-bold text-center animate-fadeIn">{authError}</p>
-                )}
-
-                <button 
-                  type="submit"
-                  className="w-full py-5 rounded-xl font-black shadow-xl active:scale-95 transition-all text-white bg-indigo-500 hover:bg-indigo-400 shadow-indigo-500/20"
-                >
-                  Authenticate
-                </button>
+                {authError && <p className="text-rose-400 text-xs font-bold text-center">{authError}</p>}
+                <button type="submit" className="w-full py-5 rounded-xl font-black text-white bg-indigo-500 hover:bg-indigo-400">Authenticate</button>
               </form>
             </div>
           )}
 
-          <div className="mt-20 text-center animate-fadeIn" style={{ animationDelay: '0.6s' }}>
+          <div className="mt-20 text-center animate-fadeIn">
             <button 
               type="button"
               onClick={() => setSelectedRoleForLogin('admin')}
@@ -380,9 +350,6 @@ const App: React.FC = () => {
             >
               🏢 Admin System
             </button>
-            <p className="mt-8 text-slate-700 text-[10px] font-bold tracking-[0.4em] uppercase">
-              Study Base OS v1.2.0
-            </p>
           </div>
         </div>
       </div>
@@ -392,14 +359,8 @@ const App: React.FC = () => {
   const isPrivileged = state.currentUser.role === 'instructor' || state.currentUser.role === 'admin';
   const isAdmin = state.currentUser.role === 'admin';
   
-  const filteredReports = isPrivileged
-    ? state.reports 
-    : state.reports.filter(r => r.studentId === state.currentUser.id);
-
-  const filteredExams = isPrivileged
-    ? state.mockExams
-    : state.mockExams.filter(e => e.studentId === state.currentUser.id);
-
+  const filteredReports = isPrivileged ? state.reports : state.reports.filter(r => r.studentId === state.currentUser.id);
+  const filteredExams = isPrivileged ? state.mockExams : state.mockExams.filter(e => e.studentId === state.currentUser.id);
   const currentUserStudent = state.students.find(s => s.id === state.currentUser.id);
 
   return (
@@ -422,7 +383,6 @@ const App: React.FC = () => {
           onLogSession={handleLogSession}
         />
       )}
-
       {activeTab === 'word-king' && (
         <WordKing 
           classroomBest={state.adminConfig.wordKingClassroomRecord}
@@ -430,7 +390,6 @@ const App: React.FC = () => {
           onNewClassroomRecord={handleNewWordKingRecord}
         />
       )}
-
       {activeTab === 'instructors' && isAdmin && (
         <InstructorCenter 
           instructors={state.instructors}
@@ -441,80 +400,14 @@ const App: React.FC = () => {
           onDeleteInstructor={handleDeleteInstructor}
         />
       )}
-
-      {activeTab === 'salary' && isAdmin && (
-        <SalaryCenter 
-          instructors={state.instructors}
-          reports={state.reports}
-        />
-      )}
-      
-      {activeTab === 'create' && isPrivileged && (
-        <ReportForm students={state.students} onSave={handleSaveReport} />
-      )}
-
-      {activeTab === 'interview' && isPrivileged && (
-        <InterviewCenter 
-          students={state.students}
-          reports={state.reports}
-          mockExams={state.mockExams}
-          adminConfig={state.adminConfig}
-        />
-      )}
-
-      {activeTab === 'mock' && (
-        <MockExamCenter 
-          students={state.students}
-          mockExams={filteredExams}
-          role={state.currentUser.role}
-          currentUserId={state.currentUser.id}
-          onSave={handleSaveMockExam}
-          onUpdate={handleUpdateMockExam}
-          onDelete={handleDeleteMockExam}
-        />
-      )}
-
-      {activeTab === 'messages' && isPrivileged && (
-        <MessageCenter 
-          reports={state.reports} 
-          students={state.students}
-          currentUser={state.currentUser}
-          onAddMessage={handleAddMessage}
-          onMarkResolved={handleMarkResolved}
-        />
-      )}
-      
-      {activeTab === 'students' && isPrivileged && (
-        <StudentCenter 
-          students={state.students}
-          reports={state.reports}
-          allSessions={sessions}
-          currentUser={state.currentUser}
-          onAddMessage={handleAddMessage}
-          onMarkResolved={handleMarkResolved}
-          onAddStudent={handleAddStudent}
-          onUpdateStudent={handleUpdateStudent}
-          onDeleteStudent={handleDeleteStudent}
-        />
-      )}
-
-      {activeTab === 'settings' && isAdmin && (
-        <AdminSettings 
-          adminConfig={state.adminConfig}
-          onUpdate={handleUpdateAdminConfig}
-        />
-      )}
-
-      {activeTab === 'reports' && (
-        <ReportList 
-          reports={filteredReports} 
-          students={state.students} 
-          currentUser={state.currentUser}
-          onAddMessage={handleAddMessage}
-          onMarkResolved={handleMarkResolved}
-          onUpdateReport={handleUpdateReport}
-        />
-      )}
+      {activeTab === 'salary' && isAdmin && <SalaryCenter instructors={state.instructors} reports={state.reports} />}
+      {activeTab === 'create' && isPrivileged && <ReportForm students={state.students} onSave={handleSaveReport} />}
+      {activeTab === 'interview' && isPrivileged && <InterviewCenter students={state.students} reports={state.reports} mockExams={state.mockExams} adminConfig={state.adminConfig} />}
+      {activeTab === 'mock' && <MockExamCenter students={state.students} mockExams={filteredExams} role={state.currentUser.role} currentUserId={state.currentUser.id} onSave={handleSaveMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />}
+      {activeTab === 'messages' && isPrivileged && <MessageCenter reports={state.reports} students={state.students} currentUser={state.currentUser} onAddMessage={handleAddMessage} onMarkResolved={handleMarkResolved} />}
+      {activeTab === 'students' && isPrivileged && <StudentCenter students={state.students} reports={state.reports} allSessions={sessions} currentUser={state.currentUser} onAddMessage={handleAddMessage} onMarkResolved={handleMarkResolved} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />}
+      {activeTab === 'settings' && isAdmin && <AdminSettings adminConfig={state.adminConfig} onUpdate={handleUpdateAdminConfig} />}
+      {activeTab === 'reports' && <ReportList reports={filteredReports} students={state.students} currentUser={state.currentUser} onAddMessage={handleAddMessage} onMarkResolved={handleMarkResolved} onUpdateReport={handleUpdateReport} />}
     </Layout>
   );
 };
