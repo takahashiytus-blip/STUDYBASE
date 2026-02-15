@@ -10,27 +10,27 @@ const extractJson = (text: string) => {
     if (jsonStr.startsWith('```')) {
       jsonStr = jsonStr.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
     }
-    // 最初と最後のブラケット/中括弧を探す
+    
+    // JSONの開始と終了を探す
     const firstBracket = jsonStr.indexOf('[');
     const firstBrace = jsonStr.indexOf('{');
     let targetJson = jsonStr;
     
     if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-      const match = jsonStr.match(/\[[\s\S]*\]/);
-      if (match) targetJson = match[0];
+      const lastBracket = jsonStr.lastIndexOf(']');
+      if (lastBracket !== -1) targetJson = jsonStr.substring(firstBracket, lastBracket + 1);
     } else if (firstBrace !== -1) {
-      const match = jsonStr.match(/\{[\s\S]*\}/);
-      if (match) targetJson = match[0];
+      const lastBrace = jsonStr.lastIndexOf('}');
+      if (lastBrace !== -1) targetJson = jsonStr.substring(firstBrace, lastBrace + 1);
     }
     
-    // 文字列内の「\n」が二重エスケープされている場合の対策
+    // 文字列内の改行コードエスケープを正規化
     targetJson = targetJson.replace(/\\n/g, "\n");
     
     return JSON.parse(targetJson);
   } catch (e) {
     console.error("JSON Parse Error. Original Text:", text);
-    // JSONとして解析できない場合、最低限の構造を返すフォールバック
-    throw new Error("AIのデータ解析に失敗しました。もう一度お試しください。");
+    throw new Error("AIデータの解析に失敗しました。もう一度生成をお試しください。");
   }
 };
 
@@ -46,8 +46,8 @@ export const generateProfessionalReport = async (
     【入力データ】生徒: ${studentName}, 科目: ${subject}, 指導メモ: ${rawNotes}, 宿題: ${homeworkAssigned}
     
     【出力の重要ルール】
-    1. weeklyPlanは必ず「1日目：内容」から「7日目：内容」まで7行で作成してください。
-    2. 各日の間には必ず本物の改行を入れてください。
+    1. weeklyPlanは必ず「1日目：...」から「7日目：...」までの形式で作成してください。
+    2. 各日の間には必ず '\\n' を入れてください。
     3. lessonSummaryなどは、保護者が安心するプロフェッショナルで温かい文章にしてください。
   `;
 
@@ -64,7 +64,7 @@ export const generateProfessionalReport = async (
             studentPerformance: { type: Type.STRING },
             homeworkStatus: { type: Type.STRING },
             nextSteps: { type: Type.STRING },
-            weeklyPlan: { type: Type.STRING, description: "1日目〜7日目の各行に改行を入れたテキスト" },
+            weeklyPlan: { type: Type.STRING, description: "1日目〜7日目の各行を改行で区切ったテキスト" },
             messageToParents: { type: Type.STRING }
           },
           required: ["lessonSummary", "studentPerformance", "homeworkStatus", "nextSteps", "weeklyPlan", "messageToParents"]
@@ -87,13 +87,13 @@ export const generateInterviewMaterial = async (
   targetSchool?: string, 
   targetFaculty?: string
 ) => {
-  const reportsSummary = reports.map(r => `${r.date} ${r.subject}: ${r.rawNotes}`).join('\n');
-  const mockSummary = mockExams.map(e => `${e.examName}: ${JSON.stringify(e.scores)}`).join('\n');
+  const reportsSummary = reports.slice(-10).map(r => `${r.date} ${r.subject}: ${r.rawNotes}`).join('\n');
+  const mockSummary = mockExams.slice(-5).map(e => `${e.examName}: ${JSON.stringify(e.scores)}`).join('\n');
 
   const prompt = `
     保護者面談用の戦略資料を詳細に作成してください。
     生徒: ${studentName} (${grade}), 所在地: ${location}, 志望校: ${targetSchool || '未定'} / ${targetFaculty || '未定'}
-    【過去の指導データ】\n${reportsSummary}\n【模試成績】\n${mockSummary}
+    【直近の指導データ】\n${reportsSummary}\n【模試成績】\n${mockSummary}
     
     地域性（${location}周辺の学校）を考慮し、具体的で建設的な提案をしてください。
   `;
@@ -103,7 +103,6 @@ export const generateInterviewMaterial = async (
       model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
-        // 思考予算を安定のために少し下げるか、またはデフォルトに任せる
         thinkingConfig: { thinkingBudget: 16384 },
         responseMimeType: "application/json",
         responseSchema: {
@@ -198,7 +197,7 @@ export const generateWordQuiz = async (grade: string) => {
       }
     },
   });
-  return extractJson(response.text || "");
+  return extractJson(response.text || "[]");
 };
 
 export const validateDisplayName = async (name: string): Promise<{ isValid: boolean; reason?: string }> => {
