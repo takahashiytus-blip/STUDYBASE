@@ -1,12 +1,20 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// process.env からの取得を試みる（vite.config.ts の define により注入される）
 const getEnv = (name: string) => {
   try {
-    return process.env[name] || (import.meta as any).env?.[name] || '';
-  } catch {
-    return (import.meta as any).env?.[name] || '';
+    // Check if process is defined safely
+    if (typeof process !== 'undefined' && process.env && process.env[name]) {
+      return process.env[name];
+    }
+    // Check import.meta.env as fallback
+    const metaEnv = (import.meta as any).env;
+    if (metaEnv && metaEnv[name]) {
+      return metaEnv[name];
+    }
+    return '';
+  } catch (e) {
+    return '';
   }
 };
 

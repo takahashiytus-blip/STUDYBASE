@@ -14,291 +14,277 @@ import MockExamCenter from './components/MockExamCenter';
 import WordKing from './components/WordKing';
 import TimetableManager from './components/TimetableManager';
 import AdminSettings from './components/AdminSettings';
+import MessageCenter from './components/MessageCenter';
+import InstructorCenter from './components/InstructorCenter';
 
 const App: React.FC = () => {
+  // Authentication and Navigation State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ role: UserRole; id: string; name: string }>({
+    role: 'student',
+    id: '',
+    name: ''
+  });
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [loginForm, setLoginForm] = useState({ email: '', password: '', newPassword: '' });
-  const [authError, setAuthError] = useState('');
-  const [loginView, setLoginView] = useState<'login' | 'reset' | 'update-password'>('login');
-  const [resetSent, setResetSent] = useState(false);
 
-  const ADMIN_EMAIL = 'takahashi@koeikai.jp';
-
-  const [state, setState] = useState<AppState>({
-    currentUser: { role: 'student', id: '', name: '' },
-    students: [],
-    instructors: [],
-    reports: [],
-    mockExams: [],
-    adminConfig: { 
-      name: '学士館 統括室', 
-      loginId: ADMIN_EMAIL, 
-      location: '東京都杉並区', 
-      wordKingClassroomRecord: 124, 
-      wordKingClassroomHolder: '初代王' 
-    }
+  // Core Data State
+  const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
+  const [students, setStudents] = useState<Student[]>(MOCK_STUDENTS);
+  const [instructors, setInstructors] = useState<Instructor[]>(MOCK_INSTRUCTORS);
+  const [mockExams, setMockExams] = useState<MockExam[]>([]);
+  const [timetable, setTimetable] = useState<TimetableEntry[]>(MOCK_TIMETABLE);
+  const [allSessions, setAllSessions] = useState<StudySession[]>([]);
+  const [adminConfig, setAdminConfig] = useState<AdminConfig>({
+    name: '学士館 統括室',
+    loginId: 'admin',
+    location: '埼玉県さいたま市',
+    wordKingClassroomRecord: 124,
+    wordKingClassroomHolder: '初代王'
   });
 
-  const [sessions, setSessions] = useState<StudySession[]>([]);
-  const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
-
   useEffect(() => {
-    const initApp = async () => {
-      if (!isSupabaseConfigured) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const { data: { session } } = await supabase!.auth.getSession();
-        if (session) {
-          await handleAuthSession(session);
-        } else {
-          setIsLoading(false);
-        }
-      } catch (e) {
-        console.error("Auth init error:", e);
-        setIsLoading(false);
-      }
-    };
-
-    initApp();
-
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'PASSWORD_RECOVERY') {
-          setLoginView('update-password');
-        } else if (session) {
-          await handleAuthSession(session);
-        } else if (event === 'SIGNED_OUT') {
-          setIsAuthenticated(false);
-          setIsLoading(false);
-        }
-      });
-      return () => subscription.unsubscribe();
-    }
+    // 起動時の初期化
+    const timer = setTimeout(() => setIsLoading(false), 800);
+    return () => clearTimeout(timer);
   }, []);
 
-  const handleAuthSession = async (session: any) => {
-    const userId = session.user.id;
-    const email = session.user.email;
-    setIsLoading(true);
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setActiveTab('dashboard');
+  };
 
-    try {
-      const { data: admin } = await supabase!.from('admin_config').select('*').eq('login_id', email).maybeSingle();
-      if (admin) {
-        setState(prev => ({ 
-          ...prev, 
-          currentUser: { role: 'admin', id: userId, name: admin.name }, 
-          adminConfig: { ...admin, loginId: admin.login_id, wordKingClassroomRecord: admin.word_king_classroom_record, wordKingClassroomHolder: admin.word_king_classroom_holder } 
-        }));
-        setIsAuthenticated(true);
-        await refreshAllData();
-        return;
+  const loginAs = (role: UserRole) => {
+    let user = { role, id: 'a1', name: '管理者' };
+    if (role === 'instructor') user = { role, id: 'i1', name: '山田 講師' };
+    if (role === 'student') user = { role, id: 's1', name: '田中 太郎' };
+    
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+  };
+
+  // Message Handlers
+  const handleAddMessage = (reportId: string, text: string) => {
+    setReports(prev => prev.map(r => {
+      if (r.id === reportId) {
+        const newMessage: ReportMessage = {
+          id: Math.random().toString(36).substr(2, 9),
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderRole: currentUser.role,
+          text,
+          timestamp: new Date().toLocaleString('ja-JP')
+        };
+        return {
+          ...r,
+          messages: [...(r.messages || []), newMessage],
+          needsAction: currentUser.role === 'student' || currentUser.role === 'parent'
+        };
       }
+      return r;
+    }));
+  };
 
-      const { data: instructor } = await supabase!.from('instructors').select('*').eq('id', userId).maybeSingle();
-      if (instructor) {
-        setState(prev => ({ ...prev, currentUser: { role: 'instructor', id: userId, name: instructor.name } }));
-        setIsAuthenticated(true);
-        await refreshAllData();
-        return;
+  const handleDeleteMessage = (reportId: string, messageId: string) => {
+    setReports(prev => prev.map(r => {
+      if (r.id === reportId) {
+        return { ...r, messages: r.messages?.filter(m => m.id !== messageId) };
       }
+      return r;
+    }));
+  };
 
-      const { data: student } = await supabase!.from('students').select('*').eq('id', userId).maybeSingle();
-      if (student) {
-        setState(prev => ({ ...prev, currentUser: { role: 'student', id: userId, name: student.name } }));
-        setIsAuthenticated(true);
-        await refreshAllData();
-        return;
+  const handleMarkResolved = (reportId: string) => {
+    setReports(prev => prev.map(r => r.id === reportId ? { ...r, needsAction: false } : r));
+  };
+
+  const handleUpdateReport = (reportId: string, updates: Partial<Report>) => {
+    setReports(prev => prev.map(r => r.id === reportId ? { ...r, ...updates } : r));
+  };
+
+  // Instructor-Student Assignment Handlers
+  const handleAssignStudent = (studentId: string, instructorId: string) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id === studentId) {
+        return { ...s, instructorIds: [...new Set([...s.instructorIds, instructorId])] };
       }
+      return s;
+    }));
+  };
 
-      setAuthError(`DB未登録：${email} は管理テーブルに見つかりません。`);
-      await supabase!.auth.signOut();
-    } catch (e) {
-      setAuthError('データ照合中にエラーが発生しました。');
-    } finally {
-      setIsLoading(false);
+  const handleRemoveStudent = (studentId: string, instructorId: string) => {
+    setStudents(prev => prev.map(s => {
+      if (s.id === studentId) {
+        return { ...s, instructorIds: s.instructorIds.filter(id => id !== instructorId) };
+      }
+      return s;
+    }));
+  };
+
+  // Main Content Router
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <Dashboard 
+            reports={reports} 
+            students={students} 
+            instructors={instructors}
+            role={currentUser.role}
+            mockExams={mockExams}
+            currentUserStudent={students.find(s => s.id === currentUser.id)}
+            currentUserId={currentUser.id}
+            allSessions={allSessions}
+            onLogSession={(s) => setAllSessions(prev => [...prev, s])}
+            timetable={timetable}
+            onUpdateTimetable={setTimetable}
+          />
+        );
+      case 'create':
+        return <ReportForm students={students} currentUser={currentUser} onSave={(r) => { setReports(prev => [r, ...prev]); setActiveTab('dashboard'); }} />;
+      case 'reports':
+        return (
+          <ReportList 
+            reports={reports} 
+            students={students} 
+            currentUser={currentUser} 
+            onAddMessage={handleAddMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onMarkResolved={handleMarkResolved}
+            onUpdateReport={handleUpdateReport}
+          />
+        );
+      case 'messages':
+        return (
+          <MessageCenter 
+            reports={reports} 
+            students={students} 
+            currentUser={currentUser} 
+            onAddMessage={handleAddMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onMarkResolved={handleMarkResolved}
+          />
+        );
+      case 'students':
+        return (
+          <StudentCenter 
+            students={students} 
+            reports={reports} 
+            allSessions={allSessions}
+            currentUser={currentUser}
+            onAddMessage={handleAddMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onMarkResolved={handleMarkResolved}
+            onAddStudent={(s) => setStudents(prev => [...prev, { ...s, id: Math.random().toString(36).substr(2, 9), instructorIds: [] }])}
+            onUpdateStudent={(id, updates) => setStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))}
+            onDeleteStudent={(id) => setStudents(prev => prev.filter(s => s.id !== id))}
+          />
+        );
+      case 'instructors':
+        return (
+          <InstructorCenter 
+            instructors={instructors} 
+            students={students} 
+            onAssignStudent={handleAssignStudent}
+            onRemoveStudent={handleRemoveStudent}
+            onAddInstructor={(ins) => setInstructors(prev => [...prev, { ...ins, id: Math.random().toString(36).substr(2, 9) }])}
+            onUpdateInstructor={(id, updates) => setInstructors(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i))}
+            onDeleteInstructor={(id) => setInstructors(prev => prev.filter(i => i.id !== id))}
+          />
+        );
+      case 'salary':
+        return <SalaryCenter instructors={instructors} reports={reports} />;
+      case 'interview':
+        return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
+      case 'mock':
+        return (
+          <MockExamCenter 
+            students={students} 
+            mockExams={mockExams} 
+            role={currentUser.role} 
+            currentUserId={currentUser.id}
+            onSave={(e) => setMockExams(prev => [...prev, e])}
+            onUpdate={(e) => setMockExams(prev => prev.map(item => item.id === e.id ? e : item))}
+            onDelete={(id) => setMockExams(prev => prev.filter(item => item.id !== id))}
+          />
+        );
+      case 'word-king':
+        return (
+          <WordKing 
+            classroomBest={adminConfig.wordKingClassroomRecord} 
+            classroomHolder={adminConfig.wordKingClassroomHolder}
+            onNewClassroomRecord={(record, holder) => setAdminConfig(prev => ({ ...prev, wordKingClassroomRecord: record, wordKingClassroomHolder: holder }))}
+          />
+        );
+      case 'timetable':
+        return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={setTimetable} />;
+      case 'settings':
+        return <AdminSettings adminConfig={adminConfig} onUpdate={(updates) => setAdminConfig(prev => ({ ...prev, ...updates }))} />;
+      default:
+        return null;
     }
   };
 
-  const refreshAllData = async () => {
-    if (isDemoMode || !supabase) return;
-    try {
-      const [r, m, s, i, sess, tt] = await Promise.all([
-        supabase.from('reports').select('*').order('date', { ascending: false }),
-        supabase.from('mock_exams').select('*'),
-        supabase.from('students').select('*'),
-        supabase.from('instructors').select('*'),
-        supabase.from('study_sessions').select('*'),
-        supabase.from('timetable').select('*')
-      ]);
-      setState(prev => ({
-        ...prev,
-        reports: (r.data || []).map(item => ({ ...item, studentId: item.student_id, sessionYear: item.session_year, sessionMonth: item.session_month, sessionCount: item.session_count, attendanceStatus: item.attendance_status, rawNotes: item.raw_notes, homeworkAssigned: item.homework_assigned, homeworkCompletion: item.homework_completion, proposedSelfStudyDays: item.proposed_self_study_days, generatedContent: item.generated_content, quizScore: item.quiz_score, needsAction: item.needs_action })),
-        mockExams: (m.data || []).map(ex => ({ ...ex, studentId: ex.student_id, examName: ex.exam_name, examDate: ex.exam_date })),
-        students: (s.data || []).map(item => ({ ...item, targetSchool: item.target_school, targetFaculty: item.target_faculty, weeklyInstructorMessage: item.weekly_instructor_message, instructorIds: item.instructor_ids || [] })),
-        instructors: i.data || []
-      }));
-      setSessions((sess.data || []).map(ss => ({ ...ss, studentId: ss.student_id })));
-      setTimetable((tt.data || []).map(entry => ({ ...entry, dayOfWeek: entry.day_of_week, startTime: entry.start_time, endTime: entry.end_time, studentId: entry.student_id, instructorId: entry.instructor_id })));
-    } catch (e) { console.error(e); }
-  };
-
-  const startDemoMode = (targetRole: UserRole) => {
-    setIsDemoMode(true);
-    setIsLoading(true);
-    setTimeout(() => {
-      setState(prev => ({
-        ...prev,
-        currentUser: { 
-          role: targetRole, 
-          id: targetRole === 'admin' ? 'demo-admin' : targetRole === 'instructor' ? 'i1' : 's1', 
-          name: targetRole === 'admin' ? '高橋 管理者' : targetRole === 'instructor' ? '山田 講師' : '田中 太郎' 
-        },
-        students: MOCK_STUDENTS,
-        instructors: MOCK_INSTRUCTORS,
-        reports: MOCK_REPORTS
-      }));
-      setTimetable(MOCK_TIMETABLE);
-      setIsAuthenticated(true);
-      setIsLoading(false);
-    }, 500);
-  };
-
-  const handleLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setAuthError('');
-
-    if (!isSupabaseConfigured) {
-      const email = loginForm.email;
-      if (email === ADMIN_EMAIL) {
-        startDemoMode('admin');
-      } else if (email.includes('instructor')) {
-        startDemoMode('instructor');
-      } else {
-        startDemoMode('student');
-      }
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { error } = await supabase!.auth.signInWithPassword({ 
-        email: loginForm.email, 
-        password: loginForm.password 
-      });
-      
-      if (error) {
-        setAuthError(`認証エラー：${error.message === 'Invalid login credentials' ? 'IDまたはパスワードが違います。' : error.message}`);
-        setIsLoading(false);
-      }
-    } catch (e) {
-      setAuthError('接続中に予期せぬエラーが発生しました。');
-      setIsLoading(false);
-    }
-  };
-
-  if (isLoading) return (
-    <div className="h-screen flex items-center justify-center bg-[#0f172a] text-white font-black animate-pulse flex-col gap-4">
-      <div className="text-4xl italic tracking-tighter">Study<span className="text-indigo-400">Base</span></div>
-      <div className="text-[10px] uppercase tracking-[0.3em] opacity-40">System Initializing...</div>
-    </div>
-  );
+  if (isLoading) {
+    return (
+      <div className="h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-slate-400 font-black tracking-widest text-[10px] uppercase">Loading Study Base...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 font-sans">
-        <div className="max-w-md w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+      <div className="h-[100dvh] bg-slate-50 flex items-center justify-center p-6 font-sans">
+        <div className="bg-white p-10 md:p-16 rounded-[3rem] shadow-xl max-w-sm w-full text-center space-y-10 border border-slate-100 animate-fadeIn">
+          <div className="space-y-2">
+            <span className="text-[11px] font-black tracking-[0.4em] text-indigo-500 uppercase block mb-1">受験専門塾 学士館</span>
+            <h1 className="text-5xl font-black tracking-tighter text-slate-900 italic">STUDY <span className="text-indigo-600">BASE</span></h1>
+            <div className="w-12 h-1.5 bg-indigo-500 mx-auto rounded-full opacity-20 mt-4"></div>
+          </div>
           
-          <div className="flex flex-col items-center mb-10 relative z-10">
-            <h1 className="text-white text-5xl font-black italic tracking-tighter mb-2">学士館</h1>
-            <div className={`px-4 py-1.5 rounded-full border flex items-center gap-2 ${isSupabaseConfigured ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-indigo-500/10 border-indigo-500/20'}`}>
-              <div className={`w-1.5 h-1.5 rounded-full ${isSupabaseConfigured ? 'bg-emerald-400' : 'bg-indigo-400'} animate-pulse`}></div>
-              <span className={`text-[9px] font-bold uppercase tracking-widest ${isSupabaseConfigured ? 'text-emerald-400' : 'text-indigo-400'}`}>
-                {isSupabaseConfigured ? 'Cloud Sync Online' : 'Local Storage Mode'}
-              </span>
-            </div>
+          <div className="space-y-4">
+            <button 
+              onClick={() => loginAs('student')}
+              className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95"
+            >
+              生徒・保護者として入室
+            </button>
+            <button 
+              onClick={() => loginAs('instructor')}
+              className="w-full py-5 bg-slate-800 text-white rounded-[1.5rem] font-black shadow-xl shadow-slate-200 hover:bg-slate-900 hover:-translate-y-1 transition-all active:scale-95"
+            >
+              講師として入室
+            </button>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6 relative z-10">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] ml-2">Login Identifier</label>
-              <input 
-                type="email" 
-                placeholder={ADMIN_EMAIL} 
-                required 
-                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-indigo-500 focus:bg-white/10 transition-all placeholder:opacity-20" 
-                value={loginForm.email} 
-                onChange={e => setLoginForm({...loginForm, email: e.target.value})} 
-              />
-            </div>
-            <div className="space-y-1">
-              <div className="flex justify-between items-center ml-2">
-                <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Access Key</label>
-                {isSupabaseConfigured && <button type="button" onClick={() => setLoginView('reset')} className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300">Reset?</button>}
-              </div>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                required 
-                className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-indigo-500 focus:bg-white/10 transition-all" 
-                value={loginForm.password} 
-                onChange={e => setLoginForm({...loginForm, password: e.target.value})} 
-              />
-            </div>
-            
-            {authError && (
-              <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl animate-headShake">
-                <p className="text-rose-400 text-[10px] text-center font-bold leading-relaxed">{authError}</p>
-              </div>
-            )}
-            
-            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl text-white font-black shadow-xl shadow-indigo-500/20 transition-all active:scale-95 group flex items-center justify-center gap-2">
-              <span>Sign In</span>
-              <span className="opacity-0 group-hover:opacity-100 transition-all translate-x-[-10px] group-hover:translate-x-0">→</span>
+          <div className="pt-4 flex flex-col items-center gap-4">
+            <button 
+              onClick={() => loginAs('admin')}
+              className="text-[10px] text-slate-300 font-black uppercase tracking-widest hover:text-indigo-400 transition-colors"
+            >
+              Admin Access
             </button>
-          </form>
-
-          <div className="mt-12 pt-8 border-t border-white/5 relative z-10">
-            <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] text-center mb-6">Development & Demo Access</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => startDemoMode('admin')} className="bg-white/5 hover:bg-white/10 border border-white/5 py-3 rounded-xl text-[10px] font-black text-white/60 transition-all">Admin Demo</button>
-              <button onClick={() => startDemoMode('instructor')} className="bg-white/5 hover:bg-white/10 border border-white/5 py-3 rounded-xl text-[10px] font-black text-white/60 transition-all">Teacher Demo</button>
-            </div>
+            <p className="text-[9px] text-slate-200 font-bold uppercase tracking-widest">Powered by Gemini AI</p>
           </div>
         </div>
       </div>
     );
   }
 
-  const isPrivileged = state.currentUser.role === 'instructor' || state.currentUser.role === 'admin';
-  const filteredReports = isPrivileged ? state.reports : state.reports.filter(r => r.studentId === state.currentUser.id);
-
   return (
     <Layout 
-      role={state.currentUser.role} 
-      userName={state.currentUser.name} 
-      onLogout={() => isDemoMode ? setIsAuthenticated(false) : supabase!.auth.signOut()} 
-      activeTab={activeTab} 
-      setActiveTab={setActiveTab} 
-      reports={state.reports}
+      role={currentUser.role} 
+      userName={currentUser.name} 
+      onLogout={handleLogout}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      reports={reports}
     >
-      {isDemoMode && (
-        <div className="bg-indigo-600 text-white text-[9px] font-black py-1.5 px-4 text-center fixed top-0 left-0 right-0 z-[100] md:left-64 shadow-lg uppercase tracking-[0.2em]">
-          Standalone Mode: Data is managed in local session
-        </div>
-      )}
-      {activeTab === 'dashboard' && <Dashboard reports={filteredReports} students={state.students} instructors={state.instructors} role={state.currentUser.role} currentUserId={state.currentUser.id} allSessions={sessions} onLogSession={async (s) => { if (isDemoMode) setSessions([...sessions, s]); else await supabase!.from('study_sessions').insert([{ id: s.id, student_id: s.studentId, date: s.date, subject: s.subject, minutes: s.minutes }]); refreshAllData(); }} timetable={timetable} onUpdateTimetable={() => {}} />}
-      {activeTab === 'create' && isPrivileged && <ReportForm students={state.students} currentUser={state.currentUser} onSave={async(r) => { if (isDemoMode) setState({ ...state, reports: [r, ...state.reports] }); else await supabase!.from('reports').insert([{ id: r.id, student_id: r.studentId, date: r.date, subject: r.subject, instructor_name: r.instructorName, session_year: r.sessionYear, session_month: r.sessionMonth, session_count: r.sessionCount, attendance_status: r.attendanceStatus, raw_notes: r.rawNotes, homework_assigned: r.homeworkAssigned, homework_completion: r.homeworkCompletion, proposed_self_study_days: r.proposedSelfStudyDays, generated_content: r.generatedContent, quiz_score: r.quizScore }]); refreshAllData(); setActiveTab('dashboard'); }} />}
-      {activeTab === 'reports' && <ReportList reports={filteredReports} students={state.students} currentUser={state.currentUser} onAddMessage={async(rid, text) => { const report = state.reports.find(r => r.id === rid); if (!report) return; const msg = { id: Math.random().toString(36).substr(2, 9), senderId: state.currentUser.id, senderName: state.currentUser.name, senderRole: state.currentUser.role, text, timestamp: new Date().toLocaleString() }; if (isDemoMode) setState({ ...state, reports: state.reports.map(r => r.id === rid ? { ...r, messages: [...(r.messages || []), msg] } : r) }); else await supabase!.from('reports').update({ messages: [...(report.messages || []), msg] }).eq('id', rid); refreshAllData(); }} onDeleteMessage={() => {}} onMarkResolved={() => {}} />}
-      {activeTab === 'students' && isPrivileged && <StudentCenter students={state.students} reports={state.reports} allSessions={sessions} currentUser={state.currentUser} onAddMessage={()=>{}} onDeleteMessage={()=>{}} onMarkResolved={()=>{}} onUpdateStudent={async(sid, updates)=>{ if (isDemoMode) setState({ ...state, students: state.students.map(s => s.id === sid ? { ...s, ...updates } : s) }); else await supabase!.from('students').update({ target_school: updates.targetSchool, target_faculty: updates.targetFaculty, weekly_instructor_message: updates.weeklyInstructorMessage }).eq('id', sid); refreshAllData(); }} />}
-      {activeTab === 'interview' && isPrivileged && <InterviewCenter students={state.students} reports={state.reports} mockExams={state.mockExams} adminConfig={state.adminConfig} />}
-      {activeTab === 'word-king' && <WordKing classroomBest={state.adminConfig.wordKingClassroomRecord} classroomHolder={state.adminConfig.wordKingClassroomHolder} onNewClassroomRecord={async(s,h)=>{ if (isDemoMode) setState({ ...state, adminConfig: { ...state.adminConfig, wordKingClassroomRecord: s, wordKingClassroomHolder: h } }); else await supabase!.from('admin_config').update({word_king_classroom_record:s, word_king_classroom_holder:h}).eq('id',1); refreshAllData(); }} />}
+      {renderContent()}
     </Layout>
   );
 };

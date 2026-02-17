@@ -8,6 +8,7 @@ interface InstructorCenterProps {
   onAssignStudent: (studentId: string, instructorId: string) => void;
   onRemoveStudent: (studentId: string, instructorId: string) => void;
   onUpdateInstructor: (instructorId: string, updates: Partial<Instructor>) => void;
+  onAddInstructor?: (instructor: Omit<Instructor, 'id'>) => void;
   onDeleteInstructor?: (instructorId: string) => void;
 }
 
@@ -17,14 +18,19 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
   onAssignStudent, 
   onRemoveStudent,
   onUpdateInstructor,
+  onAddInstructor,
   onDeleteInstructor
 }) => {
   const [selectedInstructorId, setSelectedInstructorId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  
   const [editName, setEditName] = useState('');
   const [editSpecialty, setEditSpecialty] = useState('');
   const [editLoginId, setEditLoginId] = useState('');
   const [editPassword, setEditPassword] = useState('');
+
+  const [addFormData, setAddFormData] = useState({ name: '', specialty: '数学・理科', loginId: '', password: '' });
 
   const selectedInstructor = instructors.find(i => i.id === selectedInstructorId);
   
@@ -60,6 +66,15 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
     setIsEditing(false);
   };
 
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onAddInstructor) {
+      onAddInstructor(addFormData);
+      setShowAddModal(false);
+      setAddFormData({ name: '', specialty: '数学・理科', loginId: '', password: '' });
+    }
+  };
+
   const handleDelete = () => {
     if (!selectedInstructorId || !onDeleteInstructor) return;
     if (window.confirm(`${editName} 講師の情報を完全に削除しますか？担当生徒の紐付けも解除されます。`)) {
@@ -71,9 +86,16 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
-      <header>
-        <h2 className="text-3xl font-black text-slate-800">講師・生徒管理</h2>
-        <p className="text-slate-500 font-medium">講師の基本情報、およびログインアカウントの設定を行います</p>
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-black text-slate-800">講師・生徒管理</h2>
+          <p className="text-slate-500 font-medium">講師の基本情報、およびログインアカウントの設定を行います</p>
+        </div>
+        {onAddInstructor && (
+          <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2">
+            <span>＋</span> 新規講師を登録
+          </button>
+        )}
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -215,13 +237,9 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                       />
                     </div>
                   </div>
-                  <p className="mt-4 text-[11px] text-slate-400 leading-relaxed italic">
-                    ※ ログインIDとパスワードは、講師が「Study Base」にログインする際に使用されます。
-                  </p>
                 </div>
               ) : (
                 <div className="p-8 md:p-10 grid grid-cols-1 md:grid-cols-2 gap-10">
-                  {/* Account Summary */}
                   <div className="col-span-full bg-white p-6 rounded-[2rem] border border-slate-100 flex items-center gap-8 mb-4">
                     <div className="flex-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ログインID</p>
@@ -233,7 +251,6 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                     </div>
                   </div>
 
-                  {/* Currently Assigned */}
                   <div className="space-y-6">
                     <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                       <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">👤</span>
@@ -254,9 +271,8 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                             <button 
                               onClick={() => onRemoveStudent(student.id, selectedInstructor.id)}
                               className="text-rose-500 hover:bg-rose-100 p-2 rounded-xl transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                              title="担当から外す"
                             >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                              ✕
                             </button>
                           </div>
                         ))
@@ -264,7 +280,6 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                     </div>
                   </div>
 
-                  {/* Available to Assign */}
                   <div className="space-y-6">
                     <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
                       <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">➕</span>
@@ -284,14 +299,7 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                           >
                             <div className="min-w-0">
                               <p className="font-bold text-slate-800 group-hover:text-indigo-700 truncate">{student.name}</p>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                <span className="text-[9px] text-slate-400 font-bold uppercase">{student.grade}</span>
-                                {student.instructorIds.length > 0 && (
-                                  <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded leading-none">
-                                    担当: {getInstructorNames(student.instructorIds)}
-                                  </span>
-                                )}
-                              </div>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase">{student.grade}</p>
                             </div>
                             <span className="text-indigo-600 font-black text-xl ml-2">+</span>
                           </button>
@@ -301,13 +309,6 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                   </div>
                 </div>
               )}
-
-              <div className="bg-slate-50 p-6 md:p-8 border-t border-slate-100">
-                <p className="text-xs text-slate-400 leading-relaxed italic text-center">
-                  ※ 複数の講師が同じ生徒を「担当」として持つことができます。<br/>
-                  担当を外しても、その生徒のデータや他の講師との紐付けは削除されません。
-                </p>
-              </div>
             </div>
           ) : (
             <div className="h-full min-h-[500px] flex flex-col items-center justify-center bg-white rounded-[3rem] border border-dashed border-slate-200 text-slate-300">
@@ -317,6 +318,44 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
           )}
         </div>
       </div>
+
+      {/* 新規講師登録モーダル */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-fadeIn">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
+            <div className="bg-indigo-600 p-8 text-white relative">
+              <h3 className="text-xl font-black">新規講師登録</h3>
+              <button onClick={() => setShowAddModal(false)} className="absolute top-6 right-6 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">✕</button>
+            </div>
+            <form onSubmit={handleAddSubmit} className="p-10 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">氏名</label>
+                  <input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({...addFormData, name: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">担当・専門</label>
+                  <input required type="text" value={addFormData.specialty} onChange={(e) => setAddFormData({...addFormData, specialty: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">ログインID</label>
+                  <input required type="text" value={addFormData.loginId} onChange={(e) => setAddFormData({...addFormData, loginId: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">パスワード</label>
+                  <input required type="text" value={addFormData.password} onChange={(e) => setAddFormData({...addFormData, password: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                </div>
+              </div>
+              <div className="pt-4 flex gap-4">
+                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-4 font-black text-slate-400">キャンセル</button>
+                <button type="submit" className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">登録する</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

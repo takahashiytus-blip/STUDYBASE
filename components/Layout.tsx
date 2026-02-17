@@ -25,9 +25,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         { id: 'dashboard', label: 'ダッシュボード', icon: '📊' },
         ...(isAdmin ? [
           { id: 'instructors', label: '講師管理', icon: '👨‍🏫' },
-          { id: 'salary', label: '給与計算', icon: '💰' }
+          { id: 'salary', label: '給与計算', icon: '💰' },
+          { id: 'timetable', label: '時間割管理', icon: '📅' },
         ] : []),
-        { id: 'timetable', label: '時間割管理', icon: '📅' },
         { id: 'word-king', label: '英単語王', icon: '👑' },
         { id: 'create', label: '報告書作成', icon: '📝' },
         { id: 'interview', label: '面談資料', icon: '🤝' },
@@ -38,7 +38,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
       ]
     : [
         { id: 'dashboard', label: 'Study Base', icon: '📈' },
-        ...(role !== 'parent' ? [{ id: 'word-king', label: '英単語王', icon: '👑' }] : []),
+        ...(role !== 'parent' ? [
+          { id: 'word-king', label: '英単語王', icon: '👑' },
+        ] : []),
         { id: 'reports', label: '指導報告書', icon: '📄' },
         { id: 'mock', label: '模試成績', icon: '🏆' },
       ];
@@ -50,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
 
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] bg-[#f8fafc] overflow-hidden">
-      {/* Mobile Header - Fixed to top to ensure reliable positioning */}
+      {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-[#0f172a] text-white p-4 flex justify-between items-center shadow-lg z-[70] h-16 border-b border-white/5">
         <div className="flex flex-col items-center flex-1">
           <span className="text-[8px] font-bold tracking-[0.2em] text-indigo-300 uppercase leading-none mb-1">受験専門塾</span>
@@ -124,7 +126,6 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         </div>
       </aside>
 
-      {/* Content Area - pt-16 added on mobile to accommodate fixed header */}
       <main 
         className="flex-1 overflow-y-auto relative bg-[#f8fafc] focus:outline-none scroll-smooth pt-16 md:pt-0"
         style={{ WebkitOverflowScrolling: 'touch' }}

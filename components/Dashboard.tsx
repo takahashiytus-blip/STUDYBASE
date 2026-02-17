@@ -56,16 +56,18 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerMode, setTimerMode] = useState<'up' | 'down'>('up');
+  const [customMins, setCustomMins] = useState('25');
   const timerRef = useRef<number | null>(null);
 
-  // カウントダウン1 (志望校入試など)
+  // 学習記録入力用ステート
+  const [logSubject, setLogSubject] = useState('数学');
+  const [logMinutes, setLogMinutes] = useState('60');
+
+  // カウントダウン
   const [target1Label, setTarget1Label] = useState(localStorage.getItem('target1Label') || '高校入試当日');
   const [target1DateStr, setTarget1DateStr] = useState(localStorage.getItem('target1Date') || '2025-03-10');
-  
-  // カウントダウン2 (定期テストなど)
   const [target2Label, setTarget2Label] = useState(localStorage.getItem('target2Label') || '次回の定期テスト');
   const [target2DateStr, setTarget2DateStr] = useState(localStorage.getItem('target2Date') || '2024-11-20');
-  
   const [isEditingCountdown, setIsEditingCountdown] = useState(false);
 
   useEffect(() => {
@@ -130,6 +132,28 @@ const Dashboard: React.FC<DashboardProps> = ({
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleSetTimer = (m: number) => {
+    setTimerSeconds(m * 60);
+    setTimerMode('down');
+    setIsTimerRunning(false);
+  };
+
+  const handleManualLog = () => {
+    const sid = currentUserStudent?.id || currentUserId;
+    const mins = parseInt(logMinutes) || 0;
+    if (mins <= 0) return;
+
+    const newSession: StudySession = {
+      id: Math.random().toString(36).substr(2, 9),
+      studentId: sid,
+      date: getLocalDateString(new Date()),
+      subject: logSubject,
+      minutes: mins
+    };
+    onLogSession(newSession);
+    alert(`${logSubject}を${mins}分記録しました！`);
+  };
+
   const diffDays1 = useMemo(() => {
     const target = new Date(target1DateStr + 'T00:00:00');
     const now = new Date();
@@ -165,11 +189,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [reports]);
 
   const todayDayOfWeek = new Date().getDay();
-  const todaysFullTimetable = useMemo(() => {
-    return timetable.filter(t => t.dayOfWeek === todayDayOfWeek)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [timetable, todayDayOfWeek]);
-
   const myTimetable = useMemo(() => {
     if (isPrivileged && role !== 'admin') {
       return timetable.filter(t => t.instructorId === currentUserId)
@@ -206,7 +225,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className="space-y-4">
-              {/* Target 1 Card */}
+              {/* Target Cards */}
               <div className="bg-indigo-950 p-6 rounded-[2.5rem] shadow-xl text-white flex flex-col justify-center relative group overflow-hidden border border-white/10 h-[140px]">
                 <div className="flex justify-between items-start mb-2 relative z-10">
                   <p className="text-[9px] font-black text-indigo-200 uppercase tracking-[0.2em]">Target 1</p>
@@ -228,48 +247,76 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <p className="text-[11px] text-indigo-100 font-black truncate mt-1">{target1Label}</p>
                   </div>
                 )}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl -mr-16 -mt-16"></div>
               </div>
-
-              {/* Target 2 Card */}
               <div className="bg-slate-800 p-6 rounded-[2.5rem] shadow-xl text-white flex flex-col justify-center relative group overflow-hidden border border-white/10 h-[140px]">
                 <div className="flex justify-between items-start mb-2 relative z-10">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Target 2</p>
                 </div>
-                {isEditingCountdown && isStudent ? (
-                  <div className="space-y-2 z-10">
-                    <input type="text" value={target2Label} onChange={(e) => setTarget2Label(e.target.value)} className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-1 text-[11px] text-white outline-none focus:bg-white/30" />
-                    <input type="date" value={target2DateStr} onChange={(e) => setTarget2DateStr(e.target.value)} className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-1 text-[11px] text-white outline-none focus:bg-white/30" />
+                <div className="relative z-10">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black text-white">{diffDays2 > 0 ? diffDays2 : 0}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Days</span>
                   </div>
-                ) : (
-                  <div className="relative z-10">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-4xl font-black text-white">{diffDays2 > 0 ? diffDays2 : 0}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Days</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 font-black truncate mt-1">{target2Label}</p>
-                  </div>
-                )}
+                  <p className="text-[11px] text-slate-300 font-black truncate mt-1">{target2Label}</p>
+                </div>
               </div>
             </div>
 
             {isStudent && (
-              <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-xl text-white flex flex-col relative overflow-hidden border border-white/5">
-                <div className="flex justify-between items-start mb-6 z-10">
+              <div className="bg-slate-900 p-7 md:p-8 rounded-[2.5rem] shadow-xl text-white flex flex-col relative overflow-hidden border border-white/5">
+                <div className="flex justify-between items-start mb-4 z-10">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Focus Timer</p>
                   <div className="flex bg-white/10 p-1 rounded-xl">
                     <button onClick={() => setTimerMode('up')} className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${timerMode === 'up' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>UP</button>
                     <button onClick={() => setTimerMode('down')} className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${timerMode === 'down' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>DOWN</button>
                   </div>
                 </div>
+                
                 <div className="flex-1 flex flex-col items-center justify-center gap-6 z-[20]">
                   <span className={`text-6xl font-mono font-black tracking-tighter ${timerSeconds === 0 && timerMode === 'down' ? 'text-rose-500 animate-pulse' : 'text-emerald-400'}`}>
                     {formatTime(timerSeconds)}
                   </span>
-                  <div className="flex items-center gap-4">
-                    <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`w-24 h-24 rounded-[2.5rem] flex items-center justify-center transition-all shadow-xl active:scale-95 border-4 ${isTimerRunning ? 'bg-rose-500 border-rose-400/50' : 'bg-indigo-500 border-indigo-400/50'}`}>
-                      {isTimerRunning ? <span className="text-3xl text-white">■</span> : <span className="text-4xl ml-1 text-white">▶</span>}
+                  
+                  {/* Preset Buttons */}
+                  <div className="w-full space-y-4">
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[50, 60, 70, 80, 90].map(m => (
+                        <button 
+                          key={m} 
+                          onClick={() => handleSetTimer(m)} 
+                          className="bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-[11px] font-black transition-all border border-white/5"
+                        >
+                          {m}m
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom Input */}
+                    <div className="flex gap-2">
+                      <div className="relative flex-1 group">
+                        <input 
+                          type="number" 
+                          value={customMins} 
+                          onChange={(e) => setCustomMins(e.target.value)}
+                          placeholder="分を入力"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-sm font-black text-white outline-none focus:border-indigo-500 focus:bg-white/10 transition-all placeholder:text-slate-600" 
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-500 uppercase tracking-widest pointer-events-none group-focus-within:text-indigo-400">Min</span>
+                      </div>
+                      <button 
+                        onClick={() => handleSetTimer(parseInt(customMins) || 0)} 
+                        className="bg-indigo-600 hover:bg-indigo-700 px-6 rounded-xl text-[12px] font-black shadow-lg transition-all active:scale-95 border border-indigo-400/30"
+                      >
+                        設定
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 w-full justify-center border-t border-white/5 pt-4">
+                    <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`flex-1 py-4 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 border-2 ${isTimerRunning ? 'bg-rose-500 border-rose-400/50' : 'bg-indigo-500 border-indigo-400/50'}`}>
+                      {isTimerRunning ? <span className="text-xl text-white font-black">PAUSE</span> : <span className="text-xl text-white font-black">START</span>}
                     </button>
+                    <button onClick={() => { setTimerSeconds(0); setIsTimerRunning(false); }} className="w-14 py-4 rounded-2xl bg-white/10 flex items-center justify-center text-xs text-slate-400 border border-white/10 hover:bg-white/20 transition-all font-black">RESET</button>
                   </div>
                 </div>
               </div>
@@ -286,7 +333,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       <section className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-black flex items-center gap-2"><span className="text-2xl">🗓️</span> 通塾スケジュール</h3>
+          <h3 className="text-xl font-black flex items-center gap-2"><span className="text-2xl">🗓️</span> {isPrivileged ? '授業スケジュール' : '通塾スケジュール'}</h3>
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Weekly View</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4">
@@ -315,30 +362,53 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {!isPrivileged && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 overflow-hidden">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h3 className="text-xl font-black text-slate-800">学習記録</h3>
-                <p className="text-xs font-bold text-slate-400 mt-1">{monday.toLocaleDateString('ja-JP')} 〜 {sunday.toLocaleDateString('ja-JP')}</p>
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 overflow-hidden">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">学習記録</h3>
+                  <p className="text-xs font-bold text-slate-400 mt-1">{monday.toLocaleDateString('ja-JP')} 〜 {sunday.toLocaleDateString('ja-JP')}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-300 uppercase">Weekly Total</p>
+                  <p className="text-xl font-black text-indigo-600">{weeklyTotalHours} h</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-slate-300 uppercase">Weekly Total</p>
-                <p className="text-xl font-black text-indigo-600">{weeklyTotalHours} h</p>
+              <div className="h-64 mb-6">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="dateLabel" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={10} tickLine={false} axisLine={false} />
+                    <Tooltip />
+                    <Legend iconType="circle" iconSize={4} wrapperStyle={{ paddingTop: '20px', fontSize: '8px' }} />
+                    {Object.entries(SUBJECT_CONFIG).map(([sub, config]) => <Bar key={sub} dataKey={sub} name={config.label} fill={config.color} stackId="a" barSize={14} />)}
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-            <div className="h-64 mb-6">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="dateLabel" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={10} tickLine={false} axisLine={false} />
-                  <Tooltip />
-                  <Legend iconType="circle" iconSize={4} wrapperStyle={{ paddingTop: '20px', fontSize: '8px' }} />
-                  {Object.entries(SUBJECT_CONFIG).map(([sub, config]) => <Bar key={sub} dataKey={sub} name={config.label} fill={config.color} stackId="a" barSize={14} />)}
-                </BarChart>
-              </ResponsiveContainer>
+
+            {/* 手動記録フォーム */}
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+              <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-4">学習内容を記録する</h4>
+              <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1 w-full">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">科目</label>
+                  <select value={logSubject} onChange={(e) => setLogSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold">
+                    {Object.keys(SUBJECT_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="w-full md:w-32">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">時間(分)</label>
+                  <input type="number" value={logMinutes} onChange={(e) => setLogMinutes(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold text-center" />
+                </div>
+                <button onClick={handleManualLog} className="w-full md:w-auto px-8 py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95">
+                  記録を保存
+                </button>
+              </div>
             </div>
           </div>
+
           <div className="space-y-8">
             {currentUserStudent?.weeklyInstructorMessage && (
               <div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-200 shadow-md">
