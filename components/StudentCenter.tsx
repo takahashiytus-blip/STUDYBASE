@@ -11,6 +11,7 @@ interface StudentCenterProps {
   allSessions: StudySession[];
   currentUser: { role: UserRole; id: string; name: string };
   onAddMessage: (reportId: string, text: string) => void;
+  onDeleteMessage: (reportId: string, messageId: string) => void;
   onMarkResolved: (reportId: string) => void;
   onAddStudent?: (student: Omit<Student, 'id' | 'instructorIds'>) => void;
   onUpdateStudent?: (studentId: string, updates: Partial<Student>) => void;
@@ -41,6 +42,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
   allSessions,
   currentUser, 
   onAddMessage, 
+  onDeleteMessage,
   onMarkResolved,
   onAddStudent,
   onUpdateStudent,
@@ -219,20 +221,18 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
         </>
       ) : (
         <div className="space-y-8 animate-fadeIn">
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setSelectedStudentId(null)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-indigo-600 shadow-sm transition-all">←</button>
-              <div>
-                <h2 className="text-3xl font-black text-slate-800">{selectedStudent?.name} さんの状況</h2>
-                <p className="text-slate-500 font-medium">今週の学習量とメッセージ管理</p>
-              </div>
+          <header className="flex items-center gap-4">
+            <button onClick={() => setSelectedStudentId(null)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-indigo-600 shadow-sm transition-all">←</button>
+            <div>
+              <h2 className="text-3xl font-black text-slate-800">{selectedStudent?.name} さんの状況</h2>
+              <p className="text-slate-500 font-medium">今週の学習量とメッセージ管理</p>
             </div>
           </header>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
                {/* 週間学習グラフ（講師用） */}
-               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+               <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-100">
                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                    <span className="w-5 h-5 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px]">📊</span>
                    週間学習推移
@@ -253,15 +253,23 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
                  </div>
                </div>
 
-               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+               <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-100">
                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6">指導報告書アーカイブ</h4>
-                 <ReportList reports={studentReports} students={students} currentUser={currentUser} onAddMessage={onAddMessage} onMarkResolved={onMarkResolved} hideHeader={true} />
+                 <ReportList 
+                  reports={studentReports} 
+                  students={students} 
+                  currentUser={currentUser} 
+                  onAddMessage={onAddMessage} 
+                  onDeleteMessage={onDeleteMessage}
+                  onMarkResolved={onMarkResolved} 
+                  hideHeader={true} 
+                />
                </div>
             </div>
 
             <div className="space-y-8">
               {/* 講師メッセージ送信フォーム */}
-              <div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-100 shadow-sm relative overflow-hidden">
+              <div className="bg-rose-50 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-rose-100 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-rose-200/20 rounded-full blur-2xl -mr-10 -mt-10"></div>
                 <h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-4 flex items-center gap-2">
                    <span className="text-base">💬</span>
@@ -285,7 +293,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
                 </p>
               </div>
 
-              <div className="bg-indigo-950 p-8 rounded-[2.5rem] shadow-xl text-white">
+              <div className="bg-indigo-950 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-xl text-white">
                 <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-6">生徒基本情報</h4>
                 <div className="space-y-4">
                   <div className="flex justify-between border-b border-white/10 pb-2">
@@ -303,15 +311,19 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
         </div>
       )}
 
-      {/* モーダル類 (既存のまま) */}
+      {/* モーダル類 */}
       {(showAddModal || editStudentId) && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-fadeIn">
-          <div className="bg-white w-full h-[90vh] max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp flex flex-col">
-            <div className="bg-indigo-600 p-8 text-white relative shrink-0">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-2 md:p-6 animate-fadeIn">
+          <div className="bg-white w-full h-[96vh] md:h-[90vh] max-w-lg rounded-[1.5rem] md:rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp flex flex-col">
+            <div className="bg-indigo-600 p-6 md:p-8 text-white relative shrink-0">
               <h3 className="text-xl font-black">{editStudentId ? '生徒情報の編集' : '新規生徒登録'}</h3>
-              <button onClick={() => { setShowAddModal(false); setEditStudentId(null); }} className="absolute top-6 right-6 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-lg transition-colors">✕</button>
+              <button onClick={() => { setShowAddModal(false); setEditStudentId(null); }} className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-lg transition-colors">✕</button>
             </div>
-            <form onSubmit={handleSave} className="p-8 space-y-6 overflow-y-auto flex-1">
+            <form 
+              onSubmit={handleSave} 
+              className="p-6 md:p-8 space-y-6 overflow-y-auto flex-1 focus:outline-none"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">氏名</label>

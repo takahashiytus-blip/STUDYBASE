@@ -9,18 +9,30 @@ interface SalaryCenterProps {
 
 const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports }) => {
   const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  
+  // 初期期間を過去3ヶ月〜今月末までに設定（データを見やすくするため）
+  const initialStart = new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().split('T')[0];
+  const initialEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-  const [startDate, setStartDate] = useState(firstDayOfMonth);
-  const [endDate, setEndDate] = useState(lastDayOfMonth);
+  const [startDate, setStartDate] = useState(initialStart);
+  const [endDate, setEndDate] = useState(initialEnd);
 
   const instructorStats = useMemo(() => {
-    // Aggregation target: report.date (which is set at the time of creation in ReportForm)
-    const filteredReports = reports.filter(r => r.date >= startDate && r.date <= endDate);
+    // 期間内の全報告書を取得
+    const filteredReports = reports.filter(r => {
+      // 報告書の日付 (YYYY-MM-DD) が指定範囲内か
+      return r.date >= startDate && r.date <= endDate;
+    });
 
     return instructors.map(instructor => {
-      const instructorReports = filteredReports.filter(r => r.instructorName === instructor.name);
+      // 講師名でフィルタリング。
+      // instructor.name または loginId が報告書の instructorName と一致するかを判定
+      // (MOCKデータの表記揺れ対策として trim と include を活用)
+      const instructorReports = filteredReports.filter(r => {
+        const rName = r.instructorName?.trim() || "";
+        const iName = instructor.name?.trim() || "";
+        return rName.includes(iName) || iName.includes(rName);
+      });
       
       const counts = {
         regular: 0,
@@ -32,11 +44,12 @@ const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports }) => 
       };
 
       instructorReports.forEach(r => {
-        if (r.sessionMonth === '春期講習') counts.spring++;
-        else if (r.sessionMonth === '夏期講習') counts.summer++;
-        else if (r.sessionMonth === '冬期講習') counts.winter++;
-        else if (r.sessionMonth === '追加') counts.additional++;
-        else if (typeof r.sessionMonth === 'number') counts.regular++;
+        const monthLabel = String(r.sessionMonth);
+        if (monthLabel.includes('春')) counts.spring++;
+        else if (monthLabel.includes('夏')) counts.summer++;
+        else if (monthLabel.includes('冬')) counts.winter++;
+        else if (monthLabel.includes('追加')) counts.additional++;
+        else counts.regular++;
       });
 
       return {
@@ -53,11 +66,11 @@ const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports }) => 
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-800">給与計算・授業集計</h2>
-          <p className="text-slate-500 font-medium">指定期間内の報告書作成数に基づき集計します</p>
+          <p className="text-slate-500 font-medium">指定期間内に作成された指導報告書数を集計します</p>
         </div>
         <div className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
           <div className="space-y-1">
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">作成開始日</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">集計開始日</label>
             <input 
               type="date" 
               value={startDate}
@@ -67,7 +80,7 @@ const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports }) => 
           </div>
           <span className="text-slate-300 mt-5">〜</span>
           <div className="space-y-1">
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">作成終了日</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">集計終了日</label>
             <input 
               type="date" 
               value={endDate}
@@ -89,7 +102,7 @@ const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports }) => 
                 <th className="px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center text-orange-500">夏期</th>
                 <th className="px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center text-indigo-500">冬期</th>
                 <th className="px-4 py-5 text-[10px] font-black uppercase tracking-widest text-center">追加</th>
-                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-right">合計作成数</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-right">合計件数</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -133,37 +146,39 @@ const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports }) => 
           </table>
         </div>
         
-        {instructorStats.length === 0 && (
+        {instructorStats.every(s => s.total === 0) && (
           <div className="py-20 text-center text-slate-400 italic">
-            指定された作成期間に該当する報告書が見つかりません
+            指定された期間（{startDate} 〜 {endDate}）に報告書データが存在しません。<br/>
+            集計対象の講師名が報告書の講師名と一致しているか確認してください。
           </div>
         )}
 
         <div className="bg-slate-50 p-6 border-t border-slate-100 flex justify-between items-center">
           <p className="text-xs text-slate-400 font-medium">
-            ※ 本画面の集計対象は、指導日ではなく報告書の「作成日（瓦版作成日）」に基づいています。
+            ※ 1つの指導報告書を「1コマ」としてカウントしています。
           </p>
           <button className="bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm">
-            <span>📊</span> CSVでダウンロード
+            <span>📊</span> CSVエクスポート
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-emerald-600 p-8 rounded-[2.5rem] shadow-lg text-white">
-          <p className="text-xs font-black text-emerald-200 uppercase tracking-widest mb-2">通常授業 作成合計</p>
-          <p className="text-4xl font-black">{instructorStats.reduce((acc, curr) => acc + curr.regular, 0)} <span className="text-base font-normal opacity-70">回</span></p>
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">期間内 合計報告書数</p>
+          <p className="text-4xl font-black text-slate-900">{instructorStats.reduce((acc, curr) => acc + curr.total, 0)} <span className="text-base font-normal opacity-30">回</span></p>
         </div>
-        <div className="bg-orange-500 p-8 rounded-[2.5rem] shadow-lg text-white">
-          <p className="text-xs font-black text-orange-100 uppercase tracking-widest mb-2">講習会 作成合計</p>
+        <div className="bg-emerald-600 p-8 rounded-[2.5rem] shadow-xl text-white">
+          <p className="text-xs font-black text-emerald-200 uppercase tracking-widest mb-2">最多作成者</p>
+          {instructorStats.reduce((prev, current) => (prev.total > current.total) ? prev : current).total > 0 ? (
+            <p className="text-3xl font-black truncate">{instructorStats.reduce((prev, current) => (prev.total > current.total) ? prev : current).name}</p>
+          ) : <p className="text-2xl font-black opacity-50">---</p>}
+        </div>
+        <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-xl text-white">
+          <p className="text-xs font-black text-indigo-200 uppercase tracking-widest mb-2">平均作成数</p>
           <p className="text-4xl font-black">
-            {instructorStats.reduce((acc, curr) => acc + curr.spring + curr.summer + curr.winter, 0)} 
-            <span className="text-base font-normal opacity-70">回</span>
+            {(instructorStats.reduce((acc, curr) => acc + curr.total, 0) / (instructors.length || 1)).toFixed(1)}
           </p>
-        </div>
-        <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-lg text-white">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">総作成件数</p>
-          <p className="text-4xl font-black">{instructorStats.reduce((acc, curr) => acc + curr.total, 0)} <span className="text-base font-normal opacity-70">回</span></p>
         </div>
       </div>
     </div>

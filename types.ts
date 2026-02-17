@@ -1,6 +1,8 @@
 
 export type UserRole = 'instructor' | 'parent' | 'student' | 'admin';
 
+export type AttendanceStatus = 'present' | 'late' | 'absent';
+
 export interface Student {
   id: string;
   name: string;
@@ -38,6 +40,17 @@ export interface StudySession {
   minutes: number;
 }
 
+export interface TimetableEntry {
+  id: string;
+  dayOfWeek: number; // 0 (Sun) - 6 (Sat)
+  startTime: string; // "17:00"
+  endTime: string;   // "18:30"
+  subject: string;
+  studentId?: string;
+  instructorId?: string;
+  room?: string;
+}
+
 export interface Report {
   id: string;
   studentId: string;
@@ -47,8 +60,11 @@ export interface Report {
   sessionYear: number;
   sessionMonth: number | string;
   sessionCount: number;
+  attendanceStatus: AttendanceStatus;
   rawNotes: string;
   homeworkAssigned: string;
+  homeworkCompletion?: number; // 宿題の実施状況 (100, 50, 0)
+  proposedSelfStudyDays?: string[]; // 自習来塾提案日 (例: ["月", "水"])
   generatedContent: {
     lessonSummary: string;
     studentPerformance: string;

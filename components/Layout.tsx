@@ -27,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
           { id: 'instructors', label: '講師管理', icon: '👨‍🏫' },
           { id: 'salary', label: '給与計算', icon: '💰' }
         ] : []),
+        { id: 'timetable', label: '時間割管理', icon: '📅' },
         { id: 'word-king', label: '英単語王', icon: '👑' },
         { id: 'create', label: '報告書作成', icon: '📝' },
         { id: 'interview', label: '面談資料', icon: '🤝' },
@@ -48,9 +49,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-[#f8fafc] overflow-hidden">
-      {/* Mobile Header */}
-      <div className="md:hidden sticky top-0 bg-[#0f172a] text-white p-4 flex justify-between items-center shadow-lg z-[70] h-16 shrink-0 border-b border-white/5">
+    <div className="flex flex-col md:flex-row h-[100dvh] bg-[#f8fafc] overflow-hidden">
+      {/* Mobile Header - Fixed to top to ensure reliable positioning */}
+      <div className="md:hidden fixed top-0 left-0 right-0 bg-[#0f172a] text-white p-4 flex justify-between items-center shadow-lg z-[70] h-16 border-b border-white/5">
         <div className="flex flex-col items-center flex-1">
           <span className="text-[8px] font-bold tracking-[0.2em] text-indigo-300 uppercase leading-none mb-1">受験専門塾</span>
           <h1 className="text-xl font-black tracking-tighter leading-none">学士館</h1>
@@ -65,14 +66,14 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
 
       {isMenuOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[51] md:hidden"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[71] md:hidden"
           onClick={() => setIsMenuOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed md:relative inset-y-0 left-0 w-72 md:w-64 bg-[#0f172a] text-white flex flex-col shrink-0 z-[55] shadow-2xl transition-transform duration-300 ease-in-out
+        fixed md:relative inset-y-0 left-0 w-72 md:w-64 bg-[#0f172a] text-white flex flex-col shrink-0 z-[75] shadow-2xl transition-transform duration-300 ease-in-out
         ${isMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-8 shrink-0 hidden md:flex flex-col items-center justify-center border-b border-white/5 bg-black/20">
@@ -123,8 +124,12 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto relative bg-[#f8fafc]">
-        <div className="max-w-[1200px] mx-auto p-6 md:p-12">
+      {/* Content Area - pt-16 added on mobile to accommodate fixed header */}
+      <main 
+        className="flex-1 overflow-y-auto relative bg-[#f8fafc] focus:outline-none scroll-smooth pt-16 md:pt-0"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        <div className="max-w-[1200px] mx-auto p-5 md:p-12 pb-24">
           {children}
         </div>
       </main>

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Student, Report, MockExam, AdminConfig } from '../types';
 import { generateInterviewMaterial } from '../services/geminiService';
 
@@ -20,6 +20,25 @@ const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mo
   const [endDate, setEndDate] = useState(today);
   const [isGenerating, setIsGenerating] = useState(false);
   const [interviewData, setInterviewData] = useState<any | null>(null);
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+
+  const loadingMessages = [
+    "直近の指導記録を分析中...",
+    "成績推移をデータ化しています...",
+    "志望校との適合性を計算中...",
+    "地域特性を踏まえた戦略を構築中...",
+    "合格へのロードマップを作成しています..."
+  ];
+
+  useEffect(() => {
+    let interval: number;
+    if (isGenerating) {
+      interval = window.setInterval(() => {
+        setLoadingMsgIndex(prev => (prev + 1) % loadingMessages.length);
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isGenerating]);
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
   
@@ -38,315 +57,212 @@ const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mo
   }, [selectedStudentId, mockExams]);
 
   const handleGenerate = async () => {
-    if (!selectedStudentId) {
-      alert('生徒を選択してください。');
-      return;
-    }
-
+    if (!selectedStudent) return;
     setIsGenerating(true);
+    setInterviewData(null);
     try {
       const result = await generateInterviewMaterial(
-        selectedStudent?.name || '',
-        selectedStudent?.grade || '',
+        selectedStudent.name,
+        selectedStudent.grade,
         filteredReports,
         filteredExams,
         adminConfig.location,
-        selectedStudent?.targetSchool,
-        selectedStudent?.targetFaculty
+        selectedStudent.targetSchool,
+        selectedStudent.targetFaculty
       );
       setInterviewData(result);
     } catch (error) {
-      alert('面談資料の生成に失敗しました。');
+      alert("資料の生成に失敗しました。時間をおいて再度お試しください。");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const SchoolList = ({ title, schools = [], colorClass }: { title: string, schools?: string[], colorClass: string }) => (
-    <div className="space-y-2">
-      <h6 className={`text-[10px] font-black uppercase tracking-widest ${colorClass} mb-2`}>{title}</h6>
-      <ul className="space-y-1">
-        {schools && schools.length > 0 ? (
-          schools.map((school, i) => (
-            <li key={i} className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${colorClass.replace('text-', 'bg-')}`}></span>
-              {school}
-            </li>
-          ))
-        ) : (
-          <li className="text-xs text-slate-300 italic">候補なし</li>
-        )}
-      </ul>
-    </div>
-  );
+  const formatDate = (dateStr: string) => {
+    return dateStr.replace(/-/g, '/');
+  };
 
   return (
     <div className="space-y-8 animate-fadeIn pb-20">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-black text-slate-800">面談資料作成</h2>
-          <p className="text-slate-500 font-medium">瓦版・模試データ・地域情報をAIが統合解析し、戦略的な面談シートを構築します</p>
-        </div>
-        <div className="flex gap-6">
-          <div className="text-right">
-            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">分析対象瓦版</p>
-            <p className="text-xl font-black text-slate-800">{filteredReports.length} <span className="text-xs font-normal text-slate-400">件</span></p>
-          </div>
-          <div className="text-right border-l border-slate-200 pl-6">
-            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">参照模試数</p>
-            <p className="text-xl font-black text-slate-800">{filteredExams.length} <span className="text-xs font-normal text-slate-400">件</span></p>
-          </div>
-        </div>
+      <header>
+        <h2 className="text-3xl font-black text-slate-800 tracking-tight">面談戦略資料作成</h2>
+        <p className="text-slate-500 font-medium">AIが多角的なデータから合格への最短経路を算出します</p>
       </header>
 
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 space-y-8 no-print">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
-          <div className="lg:col-span-5">
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">対象生徒を選択</label>
-            <select
-              value={selectedStudentId}
-              onChange={(e) => {
-                setSelectedStudentId(e.target.value);
-                setInterviewData(null);
-              }}
-              className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none text-lg font-bold transition-all"
-            >
-              <option value="">生徒を選択してください</option>
-              {students.map(s => (
-                <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>
-              ))}
-            </select>
+      {/* Analysis Control Panel - Using White Frames */}
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+        <div className="md:col-span-5">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">分析対象生徒</label>
+          <select
+            value={selectedStudentId}
+            onChange={(e) => setSelectedStudentId(e.target.value)}
+            className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500 transition-all text-slate-700 bg-slate-50/30"
+          >
+            <option value="">生徒を選択</option>
+            {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
+          </select>
+        </div>
+        
+        <div className="md:col-span-4">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">分析期間</label>
+          <div className="flex items-center bg-slate-50/30 border-2 border-slate-100 rounded-2xl overflow-hidden">
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={(e) => setStartDate(e.target.value)} 
+              className="flex-1 bg-transparent px-3 py-3.5 font-bold outline-none text-xs text-slate-600 focus:bg-white transition-colors" 
+            />
+            <span className="text-slate-300 font-black px-1">〜</span>
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={(e) => setEndDate(e.target.value)} 
+              className="flex-1 bg-transparent px-3 py-3.5 font-bold outline-none text-xs text-slate-600 focus:bg-white transition-colors" 
+            />
           </div>
+        </div>
 
-          <div className="lg:col-span-4 flex items-center gap-2">
-            <div className="flex-1">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">参照開始日</label>
-              <input 
-                type="date" 
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <span className="text-slate-300 mt-6">〜</span>
-            <div className="flex-1">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">参照終了日</label>
-              <input 
-                type="date" 
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="lg:col-span-3">
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating || !selectedStudentId}
-              className={`w-full h-[62px] rounded-2xl font-black text-white shadow-lg transition-all flex items-center justify-center gap-3 ${
-                isGenerating || !selectedStudentId 
-                  ? 'bg-slate-300 cursor-not-allowed' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'
-              }`}
-            >
-              {isGenerating ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  高度解析中...
-                </span>
-              ) : '✨ 戦略シートを構築'}
-            </button>
-          </div>
+        <div className="md:col-span-3">
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || !selectedStudentId}
+            className={`w-full py-4 rounded-2xl font-black text-white shadow-xl transition-all active:scale-95 ${isGenerating || !selectedStudentId ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-200'}`}
+          >
+            {isGenerating ? "分析中..." : "✨ 戦略資料を生成"}
+          </button>
         </div>
       </div>
 
-      {!interviewData ? (
-        <div className="py-32 flex flex-col items-center justify-center bg-slate-50 rounded-[3rem] border-4 border-dashed border-slate-200 text-slate-300">
-          <span className="text-8xl mb-6 grayscale opacity-20">📊</span>
-          <p className="text-xl font-bold">生徒を選択して戦略分析を開始してください</p>
-          <p className="text-sm mt-2 font-medium">模試データと指導記録から「合格への最短距離」を導き出します</p>
-        </div>
-      ) : (
-        <div className="animate-slideUp max-w-[900px] mx-auto bg-white rounded-[3rem] shadow-2xl border border-slate-100 flex flex-col overflow-hidden min-h-[1200px] print:shadow-none print:border-none print:m-0 print:rounded-none">
-          {/* Interview Sheet Header */}
-          <div className="bg-slate-900 text-white p-12 relative overflow-hidden print:bg-slate-800 print:p-8">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -mr-20 -mt-20 blur-3xl print:hidden"></div>
-            <p className="text-[10px] font-black tracking-[0.4em] uppercase opacity-50 mb-2">FOR PARENT-TEACHER STRATEGY MEETING / {startDate.replace(/-/g, '/')} - {endDate.replace(/-/g, '/')}</p>
-            <h3 className="text-4xl font-black tracking-tighter mb-4 print:text-3xl">
-              学習指導面談・志望校戦略資料
-            </h3>
-            <div className="flex flex-wrap gap-x-10 gap-y-4 border-t border-white/10 pt-6">
-              <div>
-                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-1">生徒氏名</p>
-                <p className="text-xl font-bold">{selectedStudent?.name} 様</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-1">学年 / 区分</p>
-                <p className="text-xl font-bold">{selectedStudent?.grade}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-1">志望校・学部系統</p>
-                <p className="text-lg font-bold">
-                  {selectedStudent?.targetSchool || '未指定'}
-                  {selectedStudent?.targetFaculty && <span className="ml-2 text-indigo-300 text-sm">/ {selectedStudent.targetFaculty}</span>}
-                </p>
-              </div>
-              <div className="ml-auto text-right">
-                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-1">作成元所在地</p>
-                <p className="text-lg font-bold text-indigo-200">{adminConfig.location}</p>
-              </div>
-            </div>
-          </div>
+      <div className="flex items-center gap-2 text-xs font-black text-slate-400 px-4">
+        <span>分析期間：</span>
+        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{formatDate(startDate)}</span>
+        <span className="mx-1">〜</span>
+        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{formatDate(endDate)}</span>
+      </div>
 
-          <div className="p-12 space-y-12 print:p-8 print:space-y-10">
-            {/* Analysis Sections */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 print:gap-8">
-              <section className="space-y-4">
-                <h4 className="text-xs font-black text-indigo-600 flex items-center gap-3 uppercase tracking-[0.2em] border-b border-indigo-50 pb-2">
-                  <span className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-lg print:hidden">🌟</span>
-                  本期間の成長と評価
-                </h4>
-                <p className="text-[15px] md:text-base text-slate-800 leading-relaxed font-bold italic pl-4 border-l-4 border-indigo-200">
-                  「{interviewData.growthPoints}」
-                </p>
-              </section>
-
-              <section className="space-y-4">
-                <h4 className="text-xs font-black text-rose-600 flex items-center gap-3 uppercase tracking-[0.2em] border-b border-rose-50 pb-2">
-                  <span className="w-8 h-8 rounded-xl bg-rose-50 flex items-center justify-center text-lg print:hidden">🎯</span>
-                  現在の課題と壁
-                </h4>
-                <p className="text-[15px] md:text-base text-slate-800 leading-relaxed font-medium">
-                  {interviewData.challenges}
-                </p>
-              </section>
-            </div>
-
-            {/* NEW: Required Study Hours Strategy */}
-            <section className="bg-indigo-50 p-10 rounded-[3rem] border border-indigo-100 shadow-sm print:p-6 print:rounded-2xl">
-              <div className="flex items-center gap-4 mb-8">
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-indigo-200">⏱️</div>
-                <div>
-                  <h4 className="text-xl font-black text-slate-800">合格への逆算：学習時間戦略</h4>
-                  <p className="text-xs font-medium text-slate-400 tracking-wider">
-                    {selectedStudent?.targetSchool ? `「${selectedStudent.targetSchool}」合格に必要な自習時間目安` : '志望校合格に向けた目標学習量'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                <div className="lg:col-span-4 bg-white p-8 rounded-[2rem] border border-indigo-50 flex flex-col items-center justify-center text-center shadow-sm">
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">週間目標 自習合計</p>
-                  <p className="text-5xl font-black text-indigo-600 mb-2">
-                    {interviewData.requiredStudyHours?.totalWeekly || '--'}
-                    <span className="text-base font-normal text-slate-400 ml-1">h</span>
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400 leading-tight">
-                    ※学校の授業を除いた<br/>家庭・塾での必要時間
-                  </p>
-                </div>
-
-                <div className="lg:col-span-8 space-y-4">
-                  <p className="text-sm font-bold text-slate-700 leading-relaxed bg-white/50 p-4 rounded-xl border border-white/50">
-                    <span className="text-indigo-500 font-black mr-2">【分析の根拠】</span>
-                    {interviewData.requiredStudyHours?.analysis}
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {interviewData.requiredStudyHours?.subjectBreakdown?.map((item: any, i: number) => (
-                      <div key={i} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 mb-1">{item.subject}</p>
-                        <p className="text-lg font-black text-slate-800 mb-1">{item.hours}<span className="text-[10px] font-normal ml-0.5">h / 週</span></p>
-                        <p className="text-[9px] text-indigo-500 font-bold leading-tight">{item.priorityReason}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* School Suggestions Section */}
-            <section className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 shadow-inner print:p-6 print:rounded-2xl">
-              <div className="flex items-center gap-4 mb-8">
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-slate-200">🏫</div>
-                <div>
-                  <h4 className="text-xl font-black text-slate-800">志望校提案プラン</h4>
-                  <p className="text-xs font-medium text-slate-400 tracking-wider">
-                    {selectedStudent?.targetSchool ? `「${selectedStudent.targetSchool}」を軸とした最適校リスト` : '模試偏差値と所在地を考慮した最適校リスト'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                {/* Public Schools */}
-                <div className="space-y-6">
-                  <h5 className="text-sm font-black text-indigo-600 border-l-4 border-indigo-600 pl-3">国公立 (国立・公立)</h5>
-                  <div className="space-y-6">
-                    <SchoolList title="チャレンジ校" schools={interviewData.suggestedSchools?.public?.challenge || []} colorClass="text-rose-500" />
-                    <SchoolList title="実力相応校" schools={interviewData.suggestedSchools?.public?.realistic || []} colorClass="text-indigo-500" />
-                    <SchoolList title="堅実校" schools={interviewData.suggestedSchools?.public?.solid || []} colorClass="text-emerald-500" />
-                  </div>
-                </div>
-
-                {/* Private Schools */}
-                <div className="space-y-6">
-                  <h5 className="text-sm font-black text-amber-600 border-l-4 border-amber-600 pl-3">私立学校</h5>
-                  <div className="space-y-6">
-                    <SchoolList title="チャレンジ校" schools={interviewData.suggestedSchools?.private?.challenge || []} colorClass="text-rose-500" />
-                    <SchoolList title="実力相応校" schools={interviewData.suggestedSchools?.private?.realistic || []} colorClass="text-indigo-500" />
-                    <SchoolList title="堅実校" schools={interviewData.suggestedSchools?.private?.solid || []} colorClass="text-emerald-500" />
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="bg-indigo-950 text-white p-10 rounded-[3rem] shadow-xl relative overflow-hidden print:bg-white print:text-slate-900 print:border print:border-slate-200 print:shadow-none">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-400/10 rounded-full blur-3xl -mr-32 -mt-32 print:hidden"></div>
-              <h4 className="text-xl font-black mb-6 flex items-center gap-4 print:text-lg print:mb-4">
-                <span className="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center text-xl print:hidden">🚀</span>
-                合格への最短ルート
-              </h4>
-              <p className="text-[16px] md:text-lg text-indigo-50 leading-loose font-medium bg-white/5 p-8 rounded-[2rem] border border-white/10 print:bg-slate-50 print:text-slate-800 print:border-none print:p-4 print:text-base">
-                {interviewData.futureStrategy}
-              </p>
-            </section>
-
-            <section className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-100 print:p-6 print:rounded-2xl">
-              <h4 className="text-xs font-black text-rose-800 mb-4 uppercase tracking-widest flex items-center gap-2">
-                <span>💬</span> ご家庭でのサポートアドバイス
-              </h4>
-              <p className="text-[15px] md:text-base text-slate-700 leading-relaxed font-bold italic">
-                「{interviewData.parentAdvice}」
-              </p>
-            </section>
-
-            <div className="pt-10 flex justify-between items-center text-slate-400 border-t border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 bg-indigo-600 rounded-full"></span>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">学士館瓦版 AI戦略エンジン 監修</span>
-              </div>
-              <div className="flex gap-4 no-print">
-                <button 
-                  onClick={() => window.print()}
-                  className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-sm transition-all shadow-xl hover:bg-slate-800 flex items-center gap-2 active:scale-95"
-                >
-                  <span>🖨️</span> PDF保存・印刷
-                </button>
-              </div>
-            </div>
-          </div>
+      {isGenerating && (
+        <div className="py-24 flex flex-col items-center justify-center animate-fadeIn bg-white rounded-[3rem] border border-slate-100 shadow-sm">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
+          <p className="text-xl font-black text-slate-800">{loadingMessages[loadingMsgIndex]}</p>
+          <p className="text-xs text-slate-400 mt-2 font-bold tracking-widest uppercase">Analyzing Instruction Data...</p>
         </div>
       )}
 
-      <style>{`
-        @media print {
-          body { background: white !important; }
-          .no-print { display: none !important; }
-          main { overflow: visible !important; height: auto !important; padding: 0 !important; }
-          aside { display: none !important; }
-          .max-w-6xl { max-width: none !important; margin: 0 !important; padding: 0 !important; }
-        }
-      `}</style>
+      {interviewData && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-slideUp">
+          <div className="lg:col-span-2 space-y-8">
+            <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-2 h-full bg-emerald-500/20"></div>
+              <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-sm">📈</span>
+                学習分析レポート
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    成長ポイント
+                  </h4>
+                  <p className="text-slate-700 font-bold leading-relaxed bg-emerald-50/30 p-6 rounded-2xl italic border border-emerald-100 text-[14px]">「{interviewData.growthPoints}」</p>
+                </div>
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    現在の課題
+                  </h4>
+                  <p className="text-slate-700 font-bold leading-relaxed bg-rose-50/30 p-6 rounded-2xl italic border border-rose-100 text-[14px]">「{interviewData.challenges}」</p>
+                </div>
+              </div>
+              <div className="mt-10 pt-10 border-t border-slate-100">
+                <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-4">今後の強化戦略</h4>
+                <p className="text-slate-800 font-bold text-[16px] leading-relaxed bg-slate-50/50 p-6 rounded-2xl border border-slate-200">{interviewData.futureStrategy}</p>
+              </div>
+            </section>
+
+            <section className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500/20"></div>
+              <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">🏫</span>
+                地域密着型・志望校提案
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">公立校ターゲット</h4>
+                    <span className="text-[8px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase tracking-tighter">Public School</span>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="bg-white p-6 rounded-2xl border-2 border-rose-50 hover:border-rose-100 transition-colors shadow-sm">
+                      <p className="text-[10px] font-black text-rose-500 mb-1 uppercase tracking-widest">挑戦校 (Challenge)</p>
+                      <p className="text-[16px] font-black text-slate-800 leading-tight">{interviewData.suggestedSchools.public.challenge.join('、')}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl border-2 border-emerald-50 hover:border-emerald-100 transition-colors shadow-sm">
+                      <p className="text-[10px] font-black text-emerald-600 mb-1 uppercase tracking-widest">相応校 (Realistic)</p>
+                      <p className="text-[16px] font-black text-slate-800 leading-tight">{interviewData.suggestedSchools.public.realistic.join('、')}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">私立校ターゲット</h4>
+                    <span className="text-[8px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase tracking-tighter">Private School</span>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="bg-white p-6 rounded-2xl border-2 border-rose-50 hover:border-rose-100 transition-colors shadow-sm">
+                      <p className="text-[10px] font-black text-rose-500 mb-1 uppercase tracking-widest">挑戦校 (Challenge)</p>
+                      <p className="text-[16px] font-black text-slate-800 leading-tight">{interviewData.suggestedSchools.private.challenge.join('、')}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl border-2 border-emerald-50 hover:border-emerald-100 transition-colors shadow-sm">
+                      <p className="text-[10px] font-black text-emerald-600 mb-1 uppercase tracking-widest">併願・安全校 (Solid)</p>
+                      <p className="text-[16px] font-black text-slate-800 leading-tight">{interviewData.suggestedSchools.private.solid.join('、')}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="space-y-8">
+            <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center justify-between">
+                <span>目標学習時間</span>
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+              </h4>
+              <div className="text-center mb-8 py-8 bg-slate-50 rounded-[2rem] border border-slate-100">
+                <p className="text-[10px] font-black text-indigo-500 mb-1 tracking-widest uppercase">Weekly Total</p>
+                <p className="text-5xl font-black text-slate-900 tracking-tighter">{interviewData.requiredStudyHours.totalWeekly} <span className="text-xl font-bold opacity-30">h</span></p>
+              </div>
+              <div className="space-y-3">
+                {interviewData.requiredStudyHours.subjectBreakdown.map((s: any, i: number) => (
+                  <div key={i} className="bg-white p-5 rounded-2xl flex justify-between items-center border border-slate-100 hover:border-indigo-400 transition-all shadow-sm group">
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-black text-slate-800 group-hover:text-indigo-600 transition-colors">{s.subject}</p>
+                      <p className="text-[9px] text-slate-400 font-bold leading-tight mt-0.5">{s.priorityReason}</p>
+                    </div>
+                    <p className="text-xl font-black text-indigo-600 shrink-0 ml-4">{s.hours}<span className="text-[11px] font-bold opacity-40 ml-0.5">h</span></p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="bg-amber-50/50 p-8 rounded-[2.5rem] border border-amber-100 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-400/5 rounded-full blur-3xl -mr-12 -mt-12 group-hover:bg-amber-400/10 transition-colors"></div>
+              <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span className="text-base">💡</span>
+                保護者様へのアドバイス
+              </h4>
+              <p className="text-slate-800 font-bold leading-relaxed italic text-[14px] relative z-10">「{interviewData.parentAdvice}」</p>
+            </section>
+            
+            <button 
+              onClick={() => window.print()} 
+              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-[13px] hover:bg-black transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95 uppercase tracking-widest"
+            >
+              <span>🖨️</span> Print Strategy Data
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

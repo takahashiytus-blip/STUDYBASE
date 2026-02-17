@@ -8,10 +8,11 @@ interface MessageCenterProps {
   students: Student[];
   currentUser: { role: UserRole; id: string; name: string };
   onAddMessage: (reportId: string, text: string) => void;
+  onDeleteMessage: (reportId: string, messageId: string) => void;
   onMarkResolved: (reportId: string) => void;
 }
 
-const MessageCenter: React.FC<MessageCenterProps> = ({ reports, students, currentUser, onAddMessage, onMarkResolved }) => {
+const MessageCenter: React.FC<MessageCenterProps> = ({ reports, students, currentUser, onAddMessage, onDeleteMessage, onMarkResolved }) => {
   // Only show reports that have messages and need action
   const pendingReports = reports.filter(r => r.needsAction);
   const getStudentName = (id: string) => students.find(s => s.id === id)?.name || '不明';
@@ -52,6 +53,7 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ reports, students, curren
               students={students} 
               currentUser={currentUser} 
               onAddMessage={onAddMessage}
+              onDeleteMessage={onDeleteMessage}
               onMarkResolved={onMarkResolved}
             />
           </div>
