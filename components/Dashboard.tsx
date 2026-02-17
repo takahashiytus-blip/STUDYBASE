@@ -181,22 +181,24 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [filteredSessions, monday]);
 
   const avgScore = useMemo(() => {
-    const scores = reports.filter(r => r.quizScore !== undefined).map(r => r.quizScore as number);
+    // 生徒・保護者の場合は自分自身の平均点、管理者・講師の場合は全体の平均点を計算
+    const relevantReports = (role === 'student' || role === 'parent')
+      ? reports.filter(r => r.studentId === currentUserId)
+      : reports;
+      
+    const scores = relevantReports.filter(r => r.quizScore !== undefined).map(r => r.quizScore as number);
     return scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '---';
-  }, [reports]);
+  }, [reports, role, currentUserId]);
 
   const todayDayOfWeek = new Date().getDay();
   const myTimetable = useMemo(() => {
     if (isAdmin) {
-      // 管理者は全スケジュールを表示
       return [...timetable].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
     }
     if (role === 'instructor') {
-      // 講師は自分のスケジュールのみ
       return timetable.filter(t => t.instructorId === currentUserId)
         .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
     }
-    // 生徒・保護者は生徒のスケジュールのみ
     const sid = currentUserStudent?.id || currentUserId;
     return timetable.filter(t => t.studentId === sid)
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
@@ -219,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         {!isPrivileged ? (
           <>
             <div className="bg-white p-7 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col justify-center">
-              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-3">Quiz Average</p>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-3">Your Quiz Average</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-5xl font-black text-slate-800">{avgScore}</span>
                 <span className="text-lg font-bold text-slate-400">pt</span>

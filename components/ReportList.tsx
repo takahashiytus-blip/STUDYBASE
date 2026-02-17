@@ -20,7 +20,17 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
   const [editBuffer, setEditBuffer] = useState<Report | null>(null);
   const [newMessage, setNewMessage] = useState('');
 
-  const selectedReport = useMemo(() => reports.find(r => r.id === selectedReportId), [reports, selectedReportId]);
+  // 閲覧権限に基づいたフィルタリング
+  const displayReports = useMemo(() => {
+    // 管理者または講師は全ての報告書を閲覧可能（または上位コンポーネントで絞り込み済み）
+    if (currentUser.role === 'admin' || currentUser.role === 'instructor') {
+      return reports;
+    }
+    // 生徒または保護者は、自身の studentId に紐づく報告書のみ閲覧可能
+    return reports.filter(r => r.studentId === currentUser.id);
+  }, [reports, currentUser]);
+
+  const selectedReport = useMemo(() => displayReports.find(r => r.id === selectedReportId), [displayReports, selectedReportId]);
   const getStudentName = (id: string) => students.find(s => s.id === id)?.name || '不明';
   const isPrivileged = currentUser.role === 'instructor' || currentUser.role === 'admin';
 
@@ -81,7 +91,6 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
     const text = selectedReport.generatedContent.weeklyPlan.replace(/\\n/g, '\n');
     let lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     
-    // 日割りのパースを強化
     const steps = Array.from({ length: 7 }, (_, i) => {
       const dayLabel = `${i + 1}日目`;
       const foundLine = lines.find(l => l.includes(dayLabel));
@@ -115,8 +124,8 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {reports.length === 0 ? <p className="col-span-full py-20 text-center text-slate-400 font-black">報告書がありません</p> : 
-          reports.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((report) => (
+        {displayReports.length === 0 ? <p className="col-span-full py-20 text-center text-slate-400 font-black">報告書がありません</p> : 
+          displayReports.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((report) => (
             <div key={report.id} onClick={() => setSelectedReportId(report.id)} className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
               <div className="flex justify-between items-start mb-4">
                 <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase">{report.subject}</span>
