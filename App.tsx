@@ -25,13 +25,22 @@ const App: React.FC = () => {
   const [loginView, setLoginView] = useState<'login' | 'reset' | 'update-password'>('login');
   const [resetSent, setResetSent] = useState(false);
 
+  // 管理者メールアドレスの定数
+  const ADMIN_EMAIL = 'takahashi@koeikai.jp';
+
   const [state, setState] = useState<AppState>({
     currentUser: { role: 'student', id: '', name: '' },
     students: [],
     instructors: [],
     reports: [],
     mockExams: [],
-    adminConfig: { name: '学士館 統括室', loginId: 'takahashi@koeikai.jp', location: '東京都杉並区', wordKingClassroomRecord: 124, wordKingClassroomHolder: '初代王' }
+    adminConfig: { 
+      name: '学士館 統括室', 
+      loginId: ADMIN_EMAIL, 
+      location: '東京都杉並区', 
+      wordKingClassroomRecord: 124, 
+      wordKingClassroomHolder: '初代王' 
+    }
   });
 
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -39,8 +48,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initApp = async () => {
-      // Supabaseが設定されていない、かつデモモードも選択されていない場合は、
-      // ログイン画面で「デモモードとして開始」を選択させるまで待機する
       if (!isSupabaseConfigured) {
         setIsLoading(false);
         return;
@@ -77,7 +84,6 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // 1. admin_config テーブルを login_id で検索
       const { data: admin } = await supabase!.from('admin_config').select('*').eq('login_id', email).maybeSingle();
       if (admin) {
         setState(prev => ({ 
@@ -90,7 +96,6 @@ const App: React.FC = () => {
         return;
       }
 
-      // 2. instructors テーブルを id (UUID) で検索
       const { data: instructor } = await supabase!.from('instructors').select('*').eq('id', userId).maybeSingle();
       if (instructor) {
         setState(prev => ({ ...prev, currentUser: { role: 'instructor', id: userId, name: instructor.name } }));
@@ -99,7 +104,6 @@ const App: React.FC = () => {
         return;
       }
 
-      // 3. students テーブルを id (UUID) で検索
       const { data: student } = await supabase!.from('students').select('*').eq('id', userId).maybeSingle();
       if (student) {
         setState(prev => ({ ...prev, currentUser: { role: 'student', id: userId, name: student.name } }));
@@ -108,10 +112,10 @@ const App: React.FC = () => {
         return;
       }
 
-      setAuthError(`認証成功しましたが、DBテーブル(admin_configなど)に '${email}' が登録されていません。`);
+      setAuthError(`DB未登録：${email} は管理テーブルに見つかりません。`);
       await supabase!.auth.signOut();
     } catch (e) {
-      setAuthError('ユーザーデータの読み込み中にエラーが発生しました。');
+      setAuthError('データ照合中にエラーが発生しました。');
     } finally {
       setIsLoading(false);
     }
@@ -128,11 +132,32 @@ const App: React.FC = () => {
         supabase.from('study_sessions').select('*'),
         supabase.from('timetable').select('*')
       ]);
+      // Fixed: mapping snake_case from DB to camelCase properties required by types.ts
       setState(prev => ({
         ...prev,
-        reports: (r.data || []).map(item => ({ ...item, studentId: item.student_id, sessionYear: item.session_year, sessionMonth: item.session_month, sessionCount: item.session_count, attendanceStatus: item.attendance_status, rawNotes: item.raw_notes, homeworkAssigned: item.homework_assigned, homeworkCompletion: item.homework_completion, proposedSelfStudyDays: item.proposed_self_study_days, generatedContent: item.generated_content, quizScore: item.quiz_score, needsAction: item.needs_action })),
+        reports: (r.data || []).map(item => ({ 
+          ...item, 
+          studentId: item.student_id, 
+          sessionYear: item.session_year, 
+          sessionMonth: item.session_month, 
+          sessionCount: item.session_count, 
+          attendanceStatus: item.attendance_status, 
+          rawNotes: item.raw_notes, 
+          homeworkAssigned: item.homework_assigned, 
+          homeworkCompletion: item.homework_completion, 
+          proposedSelfStudyDays: item.proposed_self_study_days, 
+          generatedContent: item.generated_content, 
+          quizScore: item.quiz_score, 
+          needsAction: item.needs_action 
+        })),
         mockExams: (m.data || []).map(ex => ({ ...ex, studentId: ex.student_id, examName: ex.exam_name, examDate: ex.exam_date })),
-        students: (s.data || []).map(item => ({ ...item, targetSchool: item.target_school, targetFaculty: item.target_faculty, weeklyInstructorMessage: item.weekly_instructor_message, instructorIds: item.instructor_ids || [] })),
+        students: (s.data || []).map(item => ({ 
+          ...item, 
+          targetSchool: item.target_school, 
+          targetFaculty: item.target_faculty, 
+          weeklyInstructorMessage: item.weekly_instructor_message, 
+          instructorIds: item.instructor_ids || [] 
+        })),
         instructors: i.data || []
       }));
       setSessions((sess.data || []).map(ss => ({ ...ss, studentId: ss.student_id })));
@@ -149,7 +174,7 @@ const App: React.FC = () => {
         currentUser: { 
           role: targetRole, 
           id: targetRole === 'admin' ? 'demo-admin' : targetRole === 'instructor' ? 'i1' : 's1', 
-          name: targetRole === 'admin' ? 'デモ管理者' : targetRole === 'instructor' ? '山田 講師' : '田中 太郎' 
+          name: targetRole === 'admin' ? '高橋 管理者' : targetRole === 'instructor' ? '山田 講師' : '田中 太郎' 
         },
         students: MOCK_STUDENTS,
         instructors: MOCK_INSTRUCTORS,
@@ -165,8 +190,18 @@ const App: React.FC = () => {
     if (e) e.preventDefault();
     setAuthError('');
 
+    // Supabaseが未設定の場合は、入力内容を見てデモモードへ自動移行
     if (!isSupabaseConfigured) {
-      setAuthError('Supabaseの環境設定が見つかりません。デモモードのみ利用可能です。');
+      const email = loginForm.email;
+      if (email === ADMIN_EMAIL) {
+        startDemoMode('admin');
+      } else if (email.includes('instructor')) {
+        startDemoMode('instructor');
+      } else if (email.includes('student') || email.includes('parent')) {
+        startDemoMode('student');
+      } else {
+        setAuthError(`オフライン：'${ADMIN_EMAIL}' かデモ用IDを入力してください。`);
+      }
       return;
     }
 
@@ -177,7 +212,7 @@ const App: React.FC = () => {
     });
     
     if (error) {
-      setAuthError(`認証エラー：${error.message === 'Invalid login credentials' ? 'メールアドレスまたはパスワードが違います。' : error.message}`);
+      setAuthError(`認証エラー：${error.message === 'Invalid login credentials' ? 'IDまたはパスワードが違います。' : error.message}`);
       setIsLoading(false);
     }
   };
@@ -211,7 +246,7 @@ const App: React.FC = () => {
 
   if (isLoading) return <div className="h-screen flex items-center justify-center bg-slate-900 text-white font-black animate-pulse flex-col gap-4">
     <div className="text-4xl italic">Study<span className="text-indigo-400">Base</span></div>
-    <div className="text-[10px] uppercase tracking-[0.3em] opacity-50 text-indigo-300">Checking Environment...</div>
+    <div className="text-[10px] uppercase tracking-[0.3em] opacity-50 text-indigo-300">Loading System...</div>
   </div>;
 
   if (!isAuthenticated) {
@@ -220,30 +255,39 @@ const App: React.FC = () => {
         <div className="max-w-md w-full bg-white/5 backdrop-blur-xl border border-white/10 p-10 rounded-[2.5rem] shadow-2xl">
           <div className="flex flex-col items-center mb-8">
             <h1 className="text-white text-5xl font-black italic tracking-tighter">学士館</h1>
-            {!isSupabaseConfigured && <div className="mt-4 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl"><p className="text-amber-400 text-[9px] font-bold text-center uppercase tracking-widest">DB connection offline</p></div>}
+            {!isSupabaseConfigured && (
+              <div className="mt-4 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                <p className="text-indigo-400 text-[9px] font-bold text-center uppercase tracking-widest leading-relaxed">
+                  Local Mode Active<br/>
+                  <span className="opacity-60 font-normal">Database not connected</span>
+                </p>
+              </div>
+            )}
           </div>
 
           {loginView === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest ml-1">Email Address</label>
-                <input type="email" placeholder="email@koeikai.jp" required className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-indigo-500 transition-all" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} />
+                <input type="email" placeholder={ADMIN_EMAIL} required className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-indigo-500 transition-all placeholder:opacity-30" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} />
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between items-center ml-1">
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Password</label>
-                  {isSupabaseConfigured && <button type="button" onClick={() => setLoginView('reset')} className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300">Forgot Password?</button>}
+                  {isSupabaseConfigured && <button type="button" onClick={() => setLoginView('reset')} className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300">Forgot?</button>}
                 </div>
                 <input type="password" placeholder="••••••••" required className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-indigo-500 transition-all" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} />
               </div>
               {authError && <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl"><p className="text-rose-400 text-[10px] text-center font-bold leading-relaxed">{authError}</p></div>}
-              <button type="submit" disabled={!isSupabaseConfigured} className={`w-full py-4 rounded-xl text-white font-black shadow-lg transition-all active:scale-95 ${!isSupabaseConfigured ? 'bg-slate-700 cursor-not-allowed' : 'bg-indigo-500 hover:bg-indigo-400'}`}>Sign In</button>
+              <button type="submit" className="w-full bg-indigo-500 py-4 rounded-xl text-white font-black shadow-lg hover:bg-indigo-400 transition-all active:scale-95">
+                {isSupabaseConfigured ? 'Sign In' : 'Sign In (Local)'}
+              </button>
             </form>
           ) : loginView === 'reset' ? (
             <form onSubmit={handleResetPassword} className="space-y-6">
               <div className="text-center mb-4">
                 <h2 className="text-white font-bold">Password Reset</h2>
-                <p className="text-white/40 text-[10px]">登録済みのメールに再設定用リンクを送信します。</p>
+                <p className="text-white/40 text-[10px]">登録済みのメールにリンクを送信します。</p>
               </div>
               {resetSent ? (
                 <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center space-y-4">
@@ -252,35 +296,26 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <input type="email" placeholder="email@example.com" required className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-indigo-500 transition-all" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} />
+                  <input type="email" placeholder="email@koeikai.jp" required className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-indigo-500 transition-all" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} />
                   {authError && <p className="text-rose-400 text-[10px] text-center font-bold">{authError}</p>}
                   <button type="submit" className="w-full bg-indigo-500 py-4 rounded-xl text-white font-black">Send Reset Link</button>
-                  <button type="button" onClick={() => setLoginView('login')} className="w-full text-white/40 text-[10px] font-bold">Back to Login</button>
+                  <button type="button" onClick={() => setLoginView('login')} className="w-full text-white/40 text-[10px] font-bold">Back</button>
                 </>
               )}
             </form>
           ) : (
             <form onSubmit={handleUpdatePassword} className="space-y-6">
-              <div className="text-center mb-4">
-                <h2 className="text-white font-bold">New Password</h2>
-                <p className="text-white/40 text-[10px]">新しいパスワードを設定してください。</p>
-              </div>
+              <h2 className="text-white font-bold text-center">New Password</h2>
               <input type="password" placeholder="New Password" required minLength={6} className="w-full bg-white/5 border border-white/10 p-4 rounded-xl text-white outline-none" value={loginForm.newPassword} onChange={e => setLoginForm({...loginForm, newPassword: e.target.value})} />
-              <button type="submit" className="w-full bg-emerald-500 py-4 rounded-xl text-white font-black">Update Password</button>
+              <button type="submit" className="w-full bg-emerald-500 py-4 rounded-xl text-white font-black">Update</button>
             </form>
           )}
 
           <div className="mt-10 pt-8 border-t border-white/10">
-            <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] text-center mb-6">Demo / Maintenance Access</p>
-            <div className="grid grid-cols-1 gap-3">
-              <button onClick={() => startDemoMode('admin')} className="w-full bg-white/5 hover:bg-amber-500/20 border border-white/10 p-4 rounded-2xl flex items-center justify-between group transition-all">
-                <span className="text-xs font-black text-white">デモモード（管理者）</span>
-                <span className="text-white/20 group-hover:text-amber-400">→</span>
-              </button>
-              <button onClick={() => startDemoMode('instructor')} className="w-full bg-white/5 hover:bg-amber-500/20 border border-white/10 p-4 rounded-2xl flex items-center justify-between group transition-all">
-                <span className="text-xs font-black text-white">デモモード（講師）</span>
-                <span className="text-white/20 group-hover:text-amber-400">→</span>
-              </button>
+            <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em] text-center mb-4">Quick Demo Access</p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => startDemoMode('admin')} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl text-[11px] font-bold text-white transition-all">高橋 管理者として入室</button>
+              <button onClick={() => startDemoMode('instructor')} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl text-[11px] font-bold text-white transition-all">山田 講師として入室</button>
             </div>
           </div>
         </div>
@@ -293,8 +328,9 @@ const App: React.FC = () => {
 
   return (
     <Layout role={state.currentUser.role} userName={state.currentUser.name} onLogout={() => isDemoMode ? setIsAuthenticated(false) : supabase!.auth.signOut()} activeTab={activeTab} setActiveTab={setActiveTab} reports={state.reports}>
-      {isDemoMode && <div className="bg-amber-500 text-white text-[9px] font-black py-1 px-4 text-center fixed top-0 left-0 right-0 z-[100] md:left-64 shadow-md">DEMO MODE: Changes will not be saved</div>}
+      {isDemoMode && <div className="bg-indigo-600 text-white text-[9px] font-black py-1 px-4 text-center fixed top-0 left-0 right-0 z-[100] md:left-64 shadow-md">LOCAL MODE: Using local simulation data</div>}
       {activeTab === 'dashboard' && <Dashboard reports={filteredReports} students={state.students} instructors={state.instructors} role={state.currentUser.role} currentUserId={state.currentUser.id} allSessions={sessions} onLogSession={async (s) => { if (isDemoMode) setSessions([...sessions, s]); else await supabase!.from('study_sessions').insert([{ id: s.id, student_id: s.studentId, date: s.date, subject: s.subject, minutes: s.minutes }]); refreshAllData(); }} timetable={timetable} onUpdateTimetable={() => {}} />}
+      {/* Fixed: corrected snake_case property access in insertion to camelCase as per Report interface */}
       {activeTab === 'create' && isPrivileged && <ReportForm students={state.students} currentUser={state.currentUser} onSave={async(r) => { if (isDemoMode) setState({ ...state, reports: [r, ...state.reports] }); else await supabase!.from('reports').insert([{ id: r.id, student_id: r.studentId, date: r.date, subject: r.subject, instructor_name: r.instructorName, session_year: r.sessionYear, session_month: r.sessionMonth, session_count: r.sessionCount, attendance_status: r.attendanceStatus, raw_notes: r.rawNotes, homework_assigned: r.homeworkAssigned, homework_completion: r.homeworkCompletion, proposed_self_study_days: r.proposedSelfStudyDays, generated_content: r.generatedContent, quiz_score: r.quizScore }]); refreshAllData(); setActiveTab('dashboard'); }} />}
       {activeTab === 'reports' && <ReportList reports={filteredReports} students={state.students} currentUser={state.currentUser} onAddMessage={async(rid, text) => { const report = state.reports.find(r => r.id === rid); if (!report) return; const msg = { id: Math.random().toString(36).substr(2, 9), senderId: state.currentUser.id, senderName: state.currentUser.name, senderRole: state.currentUser.role, text, timestamp: new Date().toLocaleString() }; if (isDemoMode) setState({ ...state, reports: state.reports.map(r => r.id === rid ? { ...r, messages: [...(r.messages || []), msg] } : r) }); else await supabase!.from('reports').update({ messages: [...(report.messages || []), msg] }).eq('id', rid); refreshAllData(); }} onDeleteMessage={() => {}} onMarkResolved={() => {}} />}
       {activeTab === 'students' && isPrivileged && <StudentCenter students={state.students} reports={state.reports} allSessions={sessions} currentUser={state.currentUser} onAddMessage={()=>{}} onDeleteMessage={()=>{}} onMarkResolved={()=>{}} onUpdateStudent={async(sid, updates)=>{ if (isDemoMode) setState({ ...state, students: state.students.map(s => s.id === sid ? { ...s, ...updates } : s) }); else await supabase!.from('students').update({ target_school: updates.targetSchool, target_faculty: updates.targetFaculty, weekly_instructor_message: updates.weeklyInstructorMessage }).eq('id', sid); refreshAllData(); }} />}
