@@ -1,11 +1,13 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// 複数の環境変数名のパターンをチェック
+// process.env からの取得を試みる（vite.config.ts の define により注入される）
 const getEnv = (name: string) => {
-  if (typeof process !== 'undefined' && process.env[name]) return process.env[name];
-  if ((import.meta as any).env && (import.meta as any).env[name]) return (import.meta as any).env[name];
-  return '';
+  try {
+    return process.env[name] || (import.meta as any).env?.[name] || '';
+  } catch {
+    return (import.meta as any).env?.[name] || '';
+  }
 };
 
 const supabaseUrl = getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL');
@@ -18,5 +20,5 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 
 if (!isSupabaseConfigured) {
-  console.log("Supabase is not configured. Falling back to Demo/Local mode.");
+  console.info("Supabase credentials not found. Initializing in Local-First mode.");
 }
