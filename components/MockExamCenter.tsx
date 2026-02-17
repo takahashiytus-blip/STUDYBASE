@@ -86,13 +86,14 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
     .filter(e => e.studentId === selectedStudentId)
     .sort((a, b) => new Date(b.examDate).getTime() - new Date(a.examDate).getTime());
 
+  // Fixed: Updated to set undefined when empty, avoiding type errors with number comparison
   const handleValueChange = (id: string, field: keyof SubjectData, value: string) => {
     if (!isPrivileged) return;
     setScores(prev => ({
       ...prev,
       [id]: {
         ...(prev[id] || {}),
-        [field]: value === '' ? '' : Number(value)
+        [field]: value === '' ? undefined : Number(value)
       }
     }));
   };
@@ -160,7 +161,7 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                     step="0.1"
                     placeholder="点"
                     disabled={!isPrivileged}
-                    value={scores[sub.id]?.score || ''}
+                    value={scores[sub.id]?.score ?? ''}
                     onChange={(e) => handleValueChange(sub.id, 'score', e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm disabled:bg-slate-100 disabled:text-slate-500"
                   />
@@ -172,7 +173,7 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                     step="0.1"
                     placeholder="偏差値"
                     disabled={!isPrivileged}
-                    value={scores[sub.id]?.deviation || ''}
+                    value={scores[sub.id]?.deviation ?? ''}
                     onChange={(e) => handleValueChange(sub.id, 'deviation', e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm text-indigo-600 disabled:bg-slate-100 disabled:text-indigo-300"
                   />
@@ -203,7 +204,7 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                         step="0.1"
                         placeholder="点"
                         disabled={!isPrivileged}
-                        value={scores[sub.id]?.score || ''}
+                        value={scores[sub.id]?.score ?? ''}
                         onChange={(e) => handleValueChange(sub.id, 'score', e.target.value)}
                         className="w-full px-2 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-indigo-500 outline-none text-xs font-bold disabled:bg-slate-100 disabled:text-slate-500"
                       />
@@ -215,7 +216,7 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                         step="0.1"
                         placeholder="偏"
                         disabled={!isPrivileged}
-                        value={scores[sub.id]?.deviation || ''}
+                        value={scores[sub.id]?.deviation ?? ''}
                         onChange={(e) => handleValueChange(sub.id, 'deviation', e.target.value)}
                         className="w-full px-2 py-2 rounded-lg bg-slate-50 border border-slate-200 focus:border-indigo-500 outline-none text-xs font-bold text-indigo-600 disabled:bg-slate-100 disabled:text-indigo-300"
                       />
@@ -382,7 +383,8 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
               </div>
               <div className="p-8">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {Object.entries(exam.scores).filter(([_, data]) => data.score !== '' || data.deviation !== '').map(([id, data]) => {
+                  {/* Fixed: Comparison of number to empty string is not allowed in TS */}
+                  {Object.entries(exam.scores).filter(([_, data]) => data.score !== undefined || data.deviation !== undefined).map(([id, data]) => {
                     let label = id;
                     const jh = JUNIOR_HIGH_SUBJECTS.find(s => s.id === id);
                     if (jh) label = jh.label;
@@ -398,13 +400,13 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                         <div className="flex justify-between items-end">
                           <div className="flex flex-col">
                             <span className="text-[9px] text-slate-400 font-bold">得点</span>
-                            <span className="text-xl font-black text-slate-800">{data.score || '--'}<span className="text-[10px] ml-0.5 text-slate-400 font-normal">点</span></span>
+                            <span className="text-xl font-black text-slate-800">{data.score ?? '--'}<span className="text-[10px] ml-0.5 text-slate-400 font-normal">点</span></span>
                           </div>
                           <div className="flex flex-col items-end">
                             <span className="text-[9px] text-indigo-400 font-bold">偏差値</span>
                             <span className="text-xl font-black text-indigo-600">
                               <span className="text-[10px] mr-1 text-indigo-300 font-normal">SS</span>
-                              {data.deviation || '--'}
+                              {data.deviation ?? '--'}
                             </span>
                           </div>
                         </div>

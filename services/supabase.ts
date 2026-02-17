@@ -1,13 +1,14 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Vercelの環境変数から読み込みます
-// ローカル開発時は .env ファイルなどに設定してください
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+// Fix: Use process.env instead of import.meta.env to resolve TypeScript "Property 'env' does not exist on type 'ImportMeta'" errors
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("SupabaseのURLまたはAnonKeyが設定されていません。環境変数を確認してください。");
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
+
+if (!supabase) {
+  console.warn("Supabase configuration is missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
 }
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);

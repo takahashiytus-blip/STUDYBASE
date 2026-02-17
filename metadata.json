@@ -1,6 +1,6 @@
 
 {
-  "name": "Study Base - AI指導報告システム",
-  "description": "AIが指導メモから高品質な報告書を生成。生徒・保護者・講師をシームレスにつなぐ次世代型学習管理プラットフォームです。",
+  "name": "Study Base - AI指導報告・管理システム",
+  "description": "AIによる高品質な指導報告書の自動生成と、校舎運営のDXを実現する次世代型学習管理プラットフォームです。",
   "requestFramePermissions": []
 }

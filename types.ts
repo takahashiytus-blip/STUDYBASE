@@ -1,24 +1,25 @@
 
 export type UserRole = 'instructor' | 'parent' | 'student' | 'admin';
-
 export type AttendanceStatus = 'present' | 'late' | 'absent';
 
 export interface Student {
-  id: string;
+  id: string; // UUID from Auth
   name: string;
   grade: string;
   instructorIds: string[];
+  targetSchool?: string;
+  targetFaculty?: string;
+  weeklyInstructorMessage?: string;
+  // Added loginId and password to fix type errors in constants and components
   loginId?: string;
   password?: string;
-  targetSchool?: string;  // 全生徒向けの志望校
-  targetFaculty?: string; // 高校生向けの志望学部
-  weeklyInstructorMessage?: string; // 講師からの最新メッセージ
 }
 
 export interface Instructor {
-  id: string;
+  id: string; // UUID from Auth
   name: string;
   specialty: string;
+  // Added loginId and password to fix type errors in constants and components
   loginId?: string;
   password?: string;
 }
@@ -30,25 +31,6 @@ export interface ReportMessage {
   senderRole: UserRole;
   text: string;
   timestamp: string;
-}
-
-export interface StudySession {
-  id: string;
-  studentId: string;
-  date: string; // YYYY-MM-DD
-  subject: string;
-  minutes: number;
-}
-
-export interface TimetableEntry {
-  id: string;
-  dayOfWeek: number; // 0 (Sun) - 6 (Sat)
-  startTime: string; // "17:00"
-  endTime: string;   // "18:30"
-  subject: string;
-  studentId?: string;
-  instructorId?: string;
-  room?: string;
 }
 
 export interface Report {
@@ -63,8 +45,8 @@ export interface Report {
   attendanceStatus: AttendanceStatus;
   rawNotes: string;
   homeworkAssigned: string;
-  homeworkCompletion?: number; // 宿題の実施状況 (100, 50, 0)
-  proposedSelfStudyDays?: string[]; // 自習来塾提案日 (例: ["月", "水"])
+  homeworkCompletion?: number;
+  proposedSelfStudyDays?: string[];
   generatedContent: {
     lessonSummary: string;
     studentPerformance: string;
@@ -78,9 +60,10 @@ export interface Report {
   needsAction?: boolean;
 }
 
+// Exported SubjectData for use in MockExam and other components
 export interface SubjectData {
-  score?: number | string;
-  deviation?: number | string;
+  score?: number;
+  deviation?: number;
 }
 
 export interface MockExam {
@@ -88,16 +71,38 @@ export interface MockExam {
   studentId: string;
   examName: string;
   examDate: string;
+  // Updated to use SubjectData interface
   scores: Record<string, SubjectData>;
 }
 
+export interface StudySession {
+  id: string;
+  studentId: string;
+  date: string;
+  subject: string;
+  minutes: number;
+}
+
+export interface TimetableEntry {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  subject: string;
+  studentId?: string;
+  instructorId?: string;
+  room?: string;
+}
+
 export interface AdminConfig {
+  id?: number;
   name: string;
   loginId: string;
-  passwordHash: string;
   location: string;
-  wordKingClassroomRecord: number; // 英単語王の教室最高スコア
-  wordKingClassroomHolder: string; // 英単語王の教室記録保持者
+  wordKingClassroomRecord: number;
+  wordKingClassroomHolder: string;
+  // Added passwordHash to fix type error in AdminSettings
+  passwordHash?: string;
 }
 
 export interface AppState {
