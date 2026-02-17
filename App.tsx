@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
+import { supabase, isSupabaseConfigured } from './services/supabase';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import ReportForm from './components/ReportForm';
@@ -17,6 +18,15 @@ import MessageCenter from './components/MessageCenter';
 import InstructorCenter from './components/InstructorCenter';
 
 type AuthStep = 'role-selection' | 'credentials';
+
+const DEFAULT_ADMIN: AdminConfig = {
+  name: '高橋 統括責任者',
+  loginId: 'takahashi@koeikai.jp',
+  passwordHash: 'password123',
+  location: '埼玉県さいたま市',
+  wordKingClassroomRecord: 124,
+  wordKingClassroomHolder: '初代王'
+};
 
 const App: React.FC = () => {
   // Authentication State
@@ -43,35 +53,82 @@ const App: React.FC = () => {
   const [timetable, setTimetable] = useState<TimetableEntry[]>(MOCK_TIMETABLE);
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
 
-  // Load Admin Config from LocalStorage or use defaults
+  // Admin Config State
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(() => {
     const saved = localStorage.getItem('adminConfig');
     if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse adminConfig", e);
-      }
+      try { return JSON.parse(saved); } catch (e) { console.error(e); }
     }
-    return {
-      name: '学士館 統括室',
-      loginId: 'admin',
-      passwordHash: 'admin', // Initial default password
-      location: '埼玉県さいたま市',
-      wordKingClassroomRecord: 124,
-      wordKingClassroomHolder: '初代王'
-    };
+    return DEFAULT_ADMIN;
   });
 
-  // Save Admin Config to LocalStorage whenever it changes
+  // Fetch Admin Config from Supabase on Mount
   useEffect(() => {
-    localStorage.setItem('adminConfig', JSON.stringify(adminConfig));
-  }, [adminConfig]);
+    const fetchAdminConfig = async () => {
+      if (!isSupabaseConfigured || !supabase) {
+        setIsLoading(false);
+        return;
+      }
 
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
+      try {
+        const { data, error } = await supabase
+          .from('admin_config')
+          .select('*')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (data && !error) {
+          const remoteConfig: AdminConfig = {
+            name: data.name,
+            loginId: data.login_id,
+            passwordHash: data.password_hash,
+            location: data.location,
+            wordKingClassroomRecord: data.word_king_record,
+            wordKingClassroomHolder: data.word_king_holder
+          };
+          setAdminConfig(remoteConfig);
+          localStorage.setItem('adminConfig', JSON.stringify(remoteConfig));
+        }
+      } catch (err) {
+        console.warn("Supabase fetch failed, using local fallback.", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAdminConfig();
   }, []);
+
+  // Update Admin Config with Supabase Sync
+  const updateAdminConfig = async (updates: Partial<AdminConfig>) => {
+    const newConfig = { ...adminConfig, ...updates };
+    setAdminConfig(newConfig);
+    localStorage.setItem('adminConfig', JSON.stringify(newConfig));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('admin_config')
+          .upsert({
+            id: 1,
+            name: newConfig.name,
+            login_id: newConfig.loginId,
+            password_hash: newConfig.passwordHash || adminConfig.passwordHash,
+            location: newConfig.location,
+            word_king_record: newConfig.wordKingClassroomRecord,
+            word_king_holder: newConfig.wordKingClassroomHolder,
+            updated_at: new Date().toISOString()
+          });
+        if (error) throw error;
+      } catch (err) {
+        console.error("Failed to sync adminConfig to Supabase:", err);
+      }
+    }
+
+    if (currentUser.role === 'admin' && updates.name) {
+      setCurrentUser(prev => ({ ...prev, name: updates.name as string }));
+    }
+  };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -93,8 +150,8 @@ const App: React.FC = () => {
     setLoginError('');
 
     if (loginRole === 'admin') {
-      // Use configured admin credentials
-      if (loginId === adminConfig.loginId && password === (adminConfig.passwordHash || 'admin')) {
+      const correctPassword = adminConfig.passwordHash || 'password123';
+      if (loginId === adminConfig.loginId && password === correctPassword) {
         setCurrentUser({ role: 'admin', id: 'admin', name: adminConfig.name });
         setIsAuthenticated(true);
         return;
@@ -107,7 +164,6 @@ const App: React.FC = () => {
         return;
       }
     } else {
-      // Student or Parent
       const std = students.find(s => s.loginId === loginId && s.password === password);
       if (std) {
         setCurrentUser({ role: loginRole, id: std.id, name: std.name });
@@ -267,7 +323,7 @@ const App: React.FC = () => {
           <WordKing 
             classroomBest={adminConfig.wordKingClassroomRecord} 
             classroomHolder={adminConfig.wordKingClassroomHolder}
-            onNewClassroomRecord={(record, holder) => setAdminConfig(prev => ({ ...prev, wordKingClassroomRecord: record, wordKingClassroomHolder: holder }))}
+            onNewClassroomRecord={(record, holder) => updateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder })}
           />
         );
       case 'timetable':
@@ -276,16 +332,7 @@ const App: React.FC = () => {
         return (
           <AdminSettings 
             adminConfig={adminConfig} 
-            onUpdate={(updates) => {
-              setAdminConfig(prev => {
-                const newConfig = { ...prev, ...updates };
-                // Also update currentUser name if currently logged in as admin to sync UI immediately
-                if (currentUser.role === 'admin' && updates.name) {
-                  setCurrentUser(c => ({ ...c, name: updates.name as string }));
-                }
-                return newConfig;
-              });
-            }} 
+            onUpdate={updateAdminConfig} 
           />
         );
       default:
