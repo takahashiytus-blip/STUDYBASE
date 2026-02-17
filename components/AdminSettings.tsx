@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AdminConfig } from '../types';
 
 interface AdminSettingsProps {
@@ -11,13 +11,26 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
   const [formData, setFormData] = useState({
     name: adminConfig.name,
     loginId: adminConfig.loginId,
-    password: adminConfig.passwordHash,
-    confirmPassword: adminConfig.passwordHash,
+    password: adminConfig.passwordHash || '',
+    confirmPassword: adminConfig.passwordHash || '',
     location: adminConfig.location,
     wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
     wordKingClassroomHolder: adminConfig.wordKingClassroomHolder
   });
   const [isSaved, setIsSaved] = useState(false);
+
+  // Synchronize internal state if props change from outside
+  useEffect(() => {
+    setFormData({
+      name: adminConfig.name,
+      loginId: adminConfig.loginId,
+      password: adminConfig.passwordHash || '',
+      confirmPassword: adminConfig.passwordHash || '',
+      location: adminConfig.location,
+      wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
+      wordKingClassroomHolder: adminConfig.wordKingClassroomHolder
+    });
+  }, [adminConfig]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

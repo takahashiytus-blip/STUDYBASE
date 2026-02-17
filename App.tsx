@@ -42,13 +42,31 @@ const App: React.FC = () => {
   const [mockExams, setMockExams] = useState<MockExam[]>([]);
   const [timetable, setTimetable] = useState<TimetableEntry[]>(MOCK_TIMETABLE);
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
-  const [adminConfig, setAdminConfig] = useState<AdminConfig>({
-    name: '学士館 統括室',
-    loginId: 'admin',
-    location: '埼玉県さいたま市',
-    wordKingClassroomRecord: 124,
-    wordKingClassroomHolder: '初代王'
+
+  // Load Admin Config from LocalStorage or use defaults
+  const [adminConfig, setAdminConfig] = useState<AdminConfig>(() => {
+    const saved = localStorage.getItem('adminConfig');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse adminConfig", e);
+      }
+    }
+    return {
+      name: '学士館 統括室',
+      loginId: 'admin',
+      passwordHash: 'admin', // Initial default password
+      location: '埼玉県さいたま市',
+      wordKingClassroomRecord: 124,
+      wordKingClassroomHolder: '初代王'
+    };
   });
+
+  // Save Admin Config to LocalStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('adminConfig', JSON.stringify(adminConfig));
+  }, [adminConfig]);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 800);
@@ -75,7 +93,8 @@ const App: React.FC = () => {
     setLoginError('');
 
     if (loginRole === 'admin') {
-      if (loginId === adminConfig.loginId && password === 'admin') {
+      // Use configured admin credentials
+      if (loginId === adminConfig.loginId && password === (adminConfig.passwordHash || 'admin')) {
         setCurrentUser({ role: 'admin', id: 'admin', name: adminConfig.name });
         setIsAuthenticated(true);
         return;
@@ -254,7 +273,21 @@ const App: React.FC = () => {
       case 'timetable':
         return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={setTimetable} />;
       case 'settings':
-        return <AdminSettings adminConfig={adminConfig} onUpdate={(updates) => setAdminConfig(prev => ({ ...prev, ...updates }))} />;
+        return (
+          <AdminSettings 
+            adminConfig={adminConfig} 
+            onUpdate={(updates) => {
+              setAdminConfig(prev => {
+                const newConfig = { ...prev, ...updates };
+                // Also update currentUser name if currently logged in as admin to sync UI immediately
+                if (currentUser.role === 'admin' && updates.name) {
+                  setCurrentUser(c => ({ ...c, name: updates.name as string }));
+                }
+                return newConfig;
+              });
+            }} 
+          />
+        );
       default:
         return null;
     }
