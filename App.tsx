@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppState, UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage } from './types';
-import { supabase, isSupabaseConfigured } from './services/supabase';
+import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -17,10 +16,18 @@ import AdminSettings from './components/AdminSettings';
 import MessageCenter from './components/MessageCenter';
 import InstructorCenter from './components/InstructorCenter';
 
+type AuthStep = 'role-selection' | 'credentials';
+
 const App: React.FC = () => {
-  // Authentication and Navigation State
+  // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [authStep, setAuthStep] = useState<AuthStep>('role-selection');
+  const [loginRole, setLoginRole] = useState<UserRole>('student');
+  const [loginId, setLoginId] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  
   const [currentUser, setCurrentUser] = useState<{ role: UserRole; id: string; name: string }>({
     role: 'student',
     id: '',
@@ -44,23 +51,53 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    // 起動時の初期化
     const timer = setTimeout(() => setIsLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setAuthStep('role-selection');
+    setLoginId('');
+    setPassword('');
+    setLoginError('');
     setActiveTab('dashboard');
   };
 
-  const loginAs = (role: UserRole) => {
-    let user = { role, id: 'a1', name: '管理者' };
-    if (role === 'instructor') user = { role, id: 'i1', name: '山田 講師' };
-    if (role === 'student') user = { role, id: 's1', name: '田中 太郎' };
-    
-    setCurrentUser(user);
-    setIsAuthenticated(true);
+  const startLoginStep = (role: UserRole) => {
+    setLoginRole(role);
+    setAuthStep('credentials');
+    setLoginError('');
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+
+    if (loginRole === 'admin') {
+      if (loginId === adminConfig.loginId && password === 'admin') {
+        setCurrentUser({ role: 'admin', id: 'admin', name: adminConfig.name });
+        setIsAuthenticated(true);
+        return;
+      }
+    } else if (loginRole === 'instructor') {
+      const ins = instructors.find(i => i.loginId === loginId && i.password === password);
+      if (ins) {
+        setCurrentUser({ role: 'instructor', id: ins.id, name: ins.name });
+        setIsAuthenticated(true);
+        return;
+      }
+    } else {
+      // Student or Parent
+      const std = students.find(s => s.loginId === loginId && s.password === password);
+      if (std) {
+        setCurrentUser({ role: loginRole, id: std.id, name: std.name });
+        setIsAuthenticated(true);
+        return;
+      }
+    }
+
+    setLoginError('IDまたはパスワードが正しくありません。');
   };
 
   // Message Handlers
@@ -102,7 +139,6 @@ const App: React.FC = () => {
     setReports(prev => prev.map(r => r.id === reportId ? { ...r, ...updates } : r));
   };
 
-  // Instructor-Student Assignment Handlers
   const handleAssignStudent = (studentId: string, instructorId: string) => {
     setStudents(prev => prev.map(s => {
       if (s.id === studentId) {
@@ -121,7 +157,6 @@ const App: React.FC = () => {
     }));
   };
 
-  // Main Content Router
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -239,37 +274,89 @@ const App: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <div className="h-[100dvh] bg-slate-50 flex items-center justify-center p-6 font-sans">
-        <div className="bg-white p-10 md:p-16 rounded-[3rem] shadow-xl max-w-sm w-full text-center space-y-10 border border-slate-100 animate-fadeIn">
-          <div className="space-y-2">
-            <span className="text-[11px] font-black tracking-[0.4em] text-indigo-500 uppercase block mb-1">受験専門塾 学士館</span>
-            <h1 className="text-5xl font-black tracking-tighter text-slate-900 italic">STUDY <span className="text-indigo-600">BASE</span></h1>
-            <div className="w-12 h-1.5 bg-indigo-500 mx-auto rounded-full opacity-20 mt-4"></div>
+        <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl max-w-sm w-full text-center border border-slate-100 animate-fadeIn relative overflow-hidden">
+          <div className="mb-10">
+            <span className="text-[10px] font-black tracking-[0.4em] text-indigo-500 uppercase block mb-1">受験専門塾 学士館</span>
+            <h1 className="text-4xl font-black tracking-tighter text-slate-900 italic">STUDY <span className="text-indigo-600">BASE</span></h1>
+            <div className="w-10 h-1 bg-indigo-500 mx-auto rounded-full opacity-20 mt-3"></div>
           </div>
           
-          <div className="space-y-4">
-            <button 
-              onClick={() => loginAs('student')}
-              className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95"
-            >
-              生徒・保護者として入室
-            </button>
-            <button 
-              onClick={() => loginAs('instructor')}
-              className="w-full py-5 bg-slate-800 text-white rounded-[1.5rem] font-black shadow-xl shadow-slate-200 hover:bg-slate-900 hover:-translate-y-1 transition-all active:scale-95"
-            >
-              講師として入室
-            </button>
-          </div>
+          {authStep === 'role-selection' ? (
+            <div className="space-y-4">
+              <button 
+                onClick={() => startLoginStep('student')}
+                className="w-full flex items-center justify-center gap-4 py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95"
+              >
+                <span className="text-2xl">🎒</span>
+                生徒・保護者として入室
+              </button>
+              <button 
+                onClick={() => startLoginStep('instructor')}
+                className="w-full flex items-center justify-center gap-4 py-6 bg-slate-800 text-white rounded-[2rem] font-black shadow-xl shadow-slate-200 hover:bg-slate-900 hover:-translate-y-1 transition-all active:scale-95"
+              >
+                <span className="text-2xl">👨‍🏫</span>
+                講師として入室
+              </button>
+              
+              <div className="pt-8">
+                <button 
+                  onClick={() => startLoginStep('admin')}
+                  className="text-[10px] font-black text-slate-300 uppercase tracking-widest hover:text-indigo-400 transition-colors"
+                >
+                  Admin Access
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="animate-fadeIn">
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <button 
+                  onClick={() => setAuthStep('role-selection')}
+                  className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-sm hover:bg-slate-200 transition-colors"
+                >
+                  ←
+                </button>
+                <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">
+                  {loginRole === 'admin' ? '管理者' : loginRole === 'instructor' ? '講師' : '生徒・保護者'} ログイン
+                </h2>
+              </div>
+              
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    placeholder="ログインID"
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none font-bold text-sm transition-all"
+                    autoFocus
+                    required
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="パスワード"
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none font-bold text-sm transition-all"
+                    required
+                  />
+                </div>
 
-          <div className="pt-4 flex flex-col items-center gap-4">
-            <button 
-              onClick={() => loginAs('admin')}
-              className="text-[10px] text-slate-300 font-black uppercase tracking-widest hover:text-indigo-400 transition-colors"
-            >
-              Admin Access
-            </button>
-            <p className="text-[9px] text-slate-200 font-bold uppercase tracking-widest">Powered by Gemini AI</p>
-          </div>
+                {loginError && (
+                  <p className="text-[10px] font-bold text-rose-500">{loginError}</p>
+                )}
+
+                <button 
+                  type="submit"
+                  className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95"
+                >
+                  入室する
+                </button>
+              </form>
+            </div>
+          )}
+
+          <p className="mt-10 text-[9px] text-slate-200 font-bold uppercase tracking-widest">Powered by Gemini AI</p>
         </div>
       </div>
     );
