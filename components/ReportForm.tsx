@@ -16,7 +16,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [subject, setSubject] = useState('');
   const [quizScore, setQuizScore] = useState<number | ''>('');
-  const [sessionYear, setSessionYear] = useState(2025);
+  const [sessionYear, setSessionYear] = useState(now.getFullYear());
   const [sessionMonth, setSessionMonth] = useState<number | string>(now.getMonth() + 1);
   const [sessionCount, setSessionCount] = useState(1);
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>('present');
@@ -25,6 +25,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   const [rawNotes, setRawNotes] = useState('');
   const [homeworkAssigned, setHomeworkAssigned] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedPreview, setGeneratedPreview] = useState<Report['generatedContent'] | null>(null);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
@@ -37,15 +38,21 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     "最終的な体裁を整えています..."
   ];
 
+  const retryMessages = [
+    "現在AIが大変混み合っています...",
+    "順番待ちをしています、少々お待ちください...",
+    "再接続を試みています..."
+  ];
+
   useEffect(() => {
     let interval: number;
     if (isGenerating) {
       interval = window.setInterval(() => {
-        setLoadingMsgIndex(prev => (prev + 1) % loadingMessages.length);
+        setLoadingMsgIndex(prev => (prev + 1) % (isRetrying ? retryMessages.length : loadingMessages.length));
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [isGenerating]);
+  }, [isGenerating, isRetrying]);
 
   const toggleSelfStudyDay = (day: string) => {
     setProposedSelfStudyDays(prev => 
@@ -62,10 +69,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     }
 
     setIsGenerating(true);
+    setIsRetrying(false);
     setErrorMessage(null);
     setLoadingMsgIndex(0);
+    
     try {
       const student = students.find(s => s.id === selectedStudentId);
+      // 通信エラー等でリトライが発生した場合の検知はサービス側で行われるが
+      // ユーザーへの表示を切り替えるためのタイマー
+      const timeout = setTimeout(() => setIsRetrying(true), 10000);
+
       const content = await generateProfessionalReport(
         student?.name || '生徒',
         subject,
@@ -76,15 +89,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
         homeworkCompletion
       );
       
+      clearTimeout(timeout);
       if (content.weeklyPlan) {
         content.weeklyPlan = content.weeklyPlan.replace(/\\n/g, '\n');
       }
-      
       setGeneratedPreview(content);
     } catch (error: any) {
-      setErrorMessage(error.message || "予期せぬエラーが発生しました。");
+      setErrorMessage(error.message || "予期せぬエラーが発生しました。時間を置いて再度お試しください。");
     } finally {
       setIsGenerating(false);
+      setIsRetrying(false);
     }
   };
 
@@ -119,9 +133,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     setRawNotes('');
     setHomeworkAssigned('');
     setGeneratedPreview(null);
-    setAttendanceStatus('present');
-    setHomeworkCompletion(100);
-    setProposedSelfStudyDays([]);
   };
 
   return (
@@ -135,7 +146,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
         <div className="bg-rose-50 border-2 border-rose-200 p-6 rounded-[2rem] animate-slideDown flex items-center gap-4">
           <span className="text-3xl">⚠️</span>
           <div>
-            <p className="text-rose-700 font-black">AI生成エラー</p>
+            <p className="text-rose-700 font-black">AIアクセス制限またはエラー</p>
             <p className="text-rose-600 text-sm font-bold">{errorMessage}</p>
           </div>
           <button onClick={() => setErrorMessage(null)} className="ml-auto text-rose-400 hover:text-rose-600 font-black">✕</button>
@@ -239,9 +250,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
               <span className="flex flex-col items-center">
                 <span className="flex items-center gap-3 mb-1">
                   <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  生成中...
+                  {isRetrying ? "再試行中..." : "生成中..."}
                 </span>
-                <span className="text-[10px] opacity-80 animate-pulse font-bold">{loadingMessages[loadingMsgIndex]}</span>
+                <span className="text-[10px] opacity-80 animate-pulse font-bold">
+                  {isRetrying ? retryMessages[loadingMsgIndex % retryMessages.length] : loadingMessages[loadingMsgIndex % loadingMessages.length]}
+                </span>
               </span>
             ) : '✨ 報告書と日割り計画を自動生成'}
           </button>

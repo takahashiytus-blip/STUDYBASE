@@ -3,23 +3,36 @@ export type UserRole = 'instructor' | 'parent' | 'student' | 'admin';
 export type AttendanceStatus = 'present' | 'late' | 'absent';
 
 export interface Student {
-  id: string; // UUID from Auth
+  id: string; 
   name: string;
   grade: string;
   instructorIds: string[];
   targetSchool?: string;
   targetFaculty?: string;
   weeklyInstructorMessage?: string;
-  // Added loginId and password to fix type errors in constants and components
   loginId?: string;
   password?: string;
+  iqHistory?: IQResult[]; // IQテスト履歴
+}
+
+export interface IQResult {
+  id: string;
+  date: string;
+  score: number;
+  estimatedIQ: number;
+  breakdown: {
+    logical: number;
+    numerical: number;
+    verbal: number;
+    spatial: number;
+  };
+  aiAnalysis?: string;
 }
 
 export interface Instructor {
-  id: string; // UUID from Auth
+  id: string; 
   name: string;
   specialty: string;
-  // Added loginId and password to fix type errors in constants and components
   loginId?: string;
   password?: string;
 }
@@ -60,7 +73,6 @@ export interface Report {
   needsAction?: boolean;
 }
 
-// Exported SubjectData for use in MockExam and other components
 export interface SubjectData {
   score?: number;
   deviation?: number;
@@ -71,7 +83,6 @@ export interface MockExam {
   studentId: string;
   examName: string;
   examDate: string;
-  // Updated to use SubjectData interface
   scores: Record<string, SubjectData>;
 }
 
@@ -101,7 +112,6 @@ export interface AdminConfig {
   location: string;
   wordKingClassroomRecord: number;
   wordKingClassroomHolder: string;
-  // Added passwordHash to fix type error in AdminSettings
   passwordHash?: string;
 }
 

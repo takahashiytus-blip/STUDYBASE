@@ -29,6 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
           { id: 'timetable', label: '時間割管理', icon: '📅' },
         ] : []),
         { id: 'word-king', label: '英単語王', icon: '👑' },
+        { id: 'iq-test', label: '知能診断', icon: '🧠' },
         { id: 'create', label: '報告書作成', icon: '📝' },
         { id: 'interview', label: '面談資料', icon: '🤝' },
         { id: 'mock', label: '模試成績', icon: '🏆' },
@@ -40,6 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         { id: 'dashboard', label: 'Study Base', icon: '📈' },
         ...(role !== 'parent' ? [
           { id: 'word-king', label: '英単語王', icon: '👑' },
+          { id: 'iq-test', label: '知能診断', icon: '🧠' },
         ] : []),
         { id: 'reports', label: '指導報告書', icon: '📄' },
         { id: 'mock', label: '模試成績', icon: '🏆' },
