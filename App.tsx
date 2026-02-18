@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
@@ -65,13 +64,13 @@ const App: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // 1. Admin Config (同期の要)
-      const { data: adminData, error: adminError } = await supabase.from('admin_config').select('*').eq('id', 1).maybeSingle();
-      if (adminData && !adminError) {
+      // 1. Admin Config
+      const { data: adminData } = await supabase.from('admin_config').select('*').eq('id', 1).maybeSingle();
+      if (adminData) {
         setAdminConfig({
           name: adminData.name,
           loginId: adminData.login_id,
-          passwordHash: adminData.password_hash,
+          passwordHash: adminData.password_hash || DEFAULT_ADMIN.passwordHash,
           location: adminData.location,
           wordKingClassroomRecord: adminData.word_king_record,
           wordKingClassroomHolder: adminData.word_king_holder
@@ -88,6 +87,8 @@ const App: React.FC = () => {
           weeklyInstructorMessage: s.weekly_instructor_message,
           instructorIds: s.instructor_ids || []
         })));
+      } else {
+        setStudents(MOCK_STUDENTS);
       }
 
       // 3. Instructors
@@ -97,6 +98,8 @@ const App: React.FC = () => {
           id: i.id, name: i.name, specialty: i.specialty,
           loginId: i.login_id, password: i.password
         })));
+      } else {
+        setInstructors(MOCK_INSTRUCTORS);
       }
 
       // 4. Reports
@@ -111,11 +114,21 @@ const App: React.FC = () => {
           proposedSelfStudyDays: r.proposed_self_study_days, generatedContent: r.generated_content,
           quizScore: r.quiz_score, messages: r.messages || [], needsAction: r.needs_action
         })));
+      } else {
+        setReports(MOCK_REPORTS);
       }
 
       // 5. Mock Exams
       const { data: mockData } = await supabase.from('mock_exams').select('*');
-      if (mockData) setMockExams(mockData.map(m => ({ ...m, studentId: m.student_id })));
+      if (mockData) {
+        setMockExams(mockData.map(m => ({
+          id: m.id,
+          studentId: m.student_id,
+          examName: m.exam_name,
+          examDate: m.exam_date,
+          scores: m.scores || {}
+        })));
+      }
 
       // 6. Timetable
       const { data: timetableData } = await supabase.from('timetable').select('*');
@@ -124,6 +137,20 @@ const App: React.FC = () => {
           id: t.id, dayOfWeek: t.day_of_week, startTime: t.start_time,
           endTime: t.end_time, subject: t.subject, studentId: t.student_id,
           instructorId: t.instructor_id, room: t.room
+        })));
+      } else {
+        setTimetable(MOCK_TIMETABLE);
+      }
+
+      // 7. Study Sessions
+      const { data: sessionData } = await supabase.from('study_sessions').select('*');
+      if (sessionData) {
+        setAllSessions(sessionData.map(s => ({
+          id: s.id,
+          studentId: s.student_id,
+          date: s.date,
+          subject: s.subject,
+          minutes: s.minutes
         })));
       }
 
@@ -138,32 +165,13 @@ const App: React.FC = () => {
     fetchAllData();
   }, [fetchAllData]);
 
-  const updateAdminConfig = async (updates: Partial<AdminConfig>) => {
-    const newConfig = { ...adminConfig, ...updates };
-    setAdminConfig(newConfig);
-    
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('admin_config').upsert({
-          id: 1,
-          name: newConfig.name,
-          login_id: newConfig.loginId,
-          password_hash: newConfig.passwordHash || adminConfig.passwordHash,
-          location: newConfig.location,
-          word_king_record: newConfig.wordKingClassroomRecord,
-          word_king_holder: newConfig.wordKingClassroomHolder,
-          updated_at: new Date().toISOString()
-        });
-      } catch (e) { console.error("Update adminConfig failed:", e); }
-    }
-  };
+  // --- Actions ---
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
 
     if (loginRole === 'admin') {
-      // DBから取得した設定値、またはデフォルト値を比較対象にする
       const targetLoginId = adminConfig.loginId || DEFAULT_ADMIN.loginId;
       const targetPassword = adminConfig.passwordHash || DEFAULT_ADMIN.passwordHash;
 
@@ -187,16 +195,238 @@ const App: React.FC = () => {
         return;
       }
     }
-
     setLoginError('IDまたはパスワードが正しくありません。');
   };
 
+  // Fix: Added handleLogout to clear authentication state and reset view state
   const handleLogout = () => {
     setIsAuthenticated(false);
-    setAuthStep('role-selection');
+    setCurrentUser({ role: 'student', id: '', name: '' });
     setLoginId('');
     setPassword('');
-    setLoginError('');
+    setActiveTab('dashboard');
+    setAuthStep('role-selection');
+  };
+
+  const updateAdminConfig = async (updates: Partial<AdminConfig>) => {
+    const newConfig = { ...adminConfig, ...updates };
+    setAdminConfig(newConfig);
+    if (supabase) {
+      await supabase.from('admin_config').upsert({
+        id: 1,
+        name: newConfig.name,
+        login_id: newConfig.loginId,
+        password_hash: newConfig.passwordHash || adminConfig.passwordHash,
+        location: newConfig.location,
+        word_king_record: newConfig.wordKingClassroomRecord,
+        word_king_holder: newConfig.wordKingClassroomHolder,
+        updated_at: new Date().toISOString()
+      });
+    }
+  };
+
+  const saveReport = async (report: Report) => {
+    setReports(prev => [report, ...prev]);
+    if (supabase) {
+      await supabase.from('reports').upsert({
+        id: report.id,
+        student_id: report.studentId,
+        date: report.date,
+        subject: report.subject,
+        instructor_name: report.instructorName,
+        session_year: report.sessionYear,
+        session_month: report.sessionMonth,
+        session_count: report.sessionCount,
+        attendance_status: report.attendanceStatus,
+        raw_notes: report.raw_notes,
+        homework_assigned: report.homeworkAssigned,
+        homework_completion: report.homeworkCompletion,
+        proposed_self_study_days: report.proposedSelfStudyDays,
+        generated_content: report.generatedContent,
+        quiz_score: report.quizScore,
+        messages: report.messages,
+        needs_action: report.needsAction
+      });
+    }
+    setActiveTab('dashboard');
+  };
+
+  const updateReport = async (reportId: string, updates: Partial<Report>) => {
+    setReports(prev => prev.map(r => r.id === reportId ? { ...r, ...updates } : r));
+    if (supabase) {
+      const r = reports.find(item => item.id === reportId);
+      if (r) {
+        const merged = { ...r, ...updates };
+        await supabase.from('reports').update({
+          messages: merged.messages,
+          needs_action: merged.needs_action,
+          generated_content: merged.generated_content,
+          subject: merged.subject,
+          attendance_status: merged.attendance_status
+        }).eq('id', reportId);
+      }
+    }
+  };
+
+  const addMessage = async (reportId: string, text: string) => {
+    const report = reports.find(r => r.id === reportId);
+    if (!report) return;
+
+    const newMessage: ReportMessage = {
+      id: Math.random().toString(36).substr(2, 9),
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderRole: currentUser.role,
+      text,
+      timestamp: new Date().toLocaleString('ja-JP')
+    };
+
+    const updatedMessages = [...(report.messages || []), newMessage];
+    const needsAction = currentUser.role === 'student' || currentUser.role === 'parent';
+    
+    await updateReport(reportId, { messages: updatedMessages, needsAction });
+  };
+
+  const deleteMessage = async (reportId: string, messageId: string) => {
+    const report = reports.find(r => r.id === reportId);
+    if (!report) return;
+    const updatedMessages = (report.messages || []).filter(m => m.id !== messageId);
+    await updateReport(reportId, { messages: updatedMessages });
+  };
+
+  const markResolved = async (reportId: string) => {
+    await updateReport(reportId, { needsAction: false });
+  };
+
+  const addStudent = async (studentData: Omit<Student, 'id' | 'instructorIds'>) => {
+    const newId = Math.random().toString(36).substr(2, 9);
+    const newStudent = { ...studentData, id: newId, instructorIds: [] };
+    setStudents(prev => [...prev, newStudent]);
+    if (supabase) {
+      await supabase.from('students').insert({
+        id: newId,
+        name: studentData.name,
+        grade: studentData.grade,
+        login_id: studentData.loginId,
+        password: studentData.password,
+        target_school: studentData.targetSchool,
+        target_faculty: studentData.targetFaculty
+      });
+    }
+  };
+
+  const updateStudent = async (id: string, updates: Partial<Student>) => {
+    setStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    if (supabase) {
+      await supabase.from('students').update({
+        name: updates.name,
+        grade: updates.grade,
+        login_id: updates.loginId,
+        password: updates.password,
+        target_school: updates.targetSchool,
+        target_faculty: updates.targetFaculty,
+        weekly_instructor_message: updates.weeklyInstructorMessage,
+        instructor_ids: updates.instructorIds
+      }).eq('id', id);
+    }
+  };
+
+  const deleteStudent = async (id: string) => {
+    setStudents(prev => prev.filter(s => s.id !== id));
+    if (supabase) await supabase.from('students').delete().eq('id', id);
+  };
+
+  const addInstructor = async (insData: Omit<Instructor, 'id'>) => {
+    const newId = Math.random().toString(36).substr(2, 9);
+    const newIns = { ...insData, id: newId };
+    setInstructors(prev => [...prev, newIns]);
+    if (supabase) {
+      await supabase.from('instructors').insert({
+        id: newId,
+        name: insData.name,
+        specialty: insData.specialty,
+        login_id: insData.loginId,
+        password: insData.password
+      });
+    }
+  };
+
+  const updateInstructor = async (id: string, updates: Partial<Instructor>) => {
+    setInstructors(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+    if (supabase) {
+      await supabase.from('instructors').update({
+        name: updates.name,
+        specialty: updates.specialty,
+        login_id: updates.loginId,
+        password: updates.password
+      }).eq('id', id);
+    }
+  };
+
+  const deleteInstructor = async (id: string) => {
+    setInstructors(prev => prev.filter(i => i.id !== id));
+    if (supabase) await supabase.from('instructors').delete().eq('id', id);
+  };
+
+  const handleLogSession = async (session: StudySession) => {
+    setAllSessions(prev => [...prev, session]);
+    if (supabase) {
+      await supabase.from('study_sessions').insert({
+        id: session.id,
+        student_id: session.studentId,
+        date: session.date,
+        subject: session.subject,
+        minutes: session.minutes
+      });
+    }
+  };
+
+  const updateTimetable = async (newTimetable: TimetableEntry[]) => {
+    setTimetable(newTimetable);
+    if (supabase) {
+      // 既存を一旦消去して入れ直す（または個別にupsert）
+      for (const entry of newTimetable) {
+        await supabase.from('timetable').upsert({
+          id: entry.id,
+          day_of_week: entry.dayOfWeek,
+          start_time: entry.startTime,
+          end_time: entry.endTime,
+          subject: entry.subject,
+          student_id: entry.studentId,
+          instructor_id: entry.instructorId,
+          room: entry.room
+        });
+      }
+    }
+  };
+
+  const saveMockExam = async (exam: MockExam) => {
+    setMockExams(prev => [...prev, exam]);
+    if (supabase) {
+      await supabase.from('mock_exams').insert({
+        id: exam.id,
+        student_id: exam.studentId,
+        exam_name: exam.examName,
+        exam_date: exam.examDate,
+        scores: exam.scores
+      });
+    }
+  };
+
+  const updateMockExam = async (exam: MockExam) => {
+    setMockExams(prev => prev.map(m => m.id === exam.id ? exam : m));
+    if (supabase) {
+      await supabase.from('mock_exams').update({
+        exam_name: exam.examName,
+        exam_date: exam.examDate,
+        scores: exam.scores
+      }).eq('id', exam.id);
+    }
+  };
+
+  const deleteMockExam = async (id: string) => {
+    setMockExams(prev => prev.filter(m => m.id !== id));
+    if (supabase) await supabase.from('mock_exams').delete().eq('id', id);
   };
 
   if (isLoading) {
@@ -307,18 +537,74 @@ const App: React.FC = () => {
             role={currentUser.role} mockExams={mockExams}
             currentUserStudent={students.find(s => s.id === currentUser.id)}
             currentUserId={currentUser.id} allSessions={allSessions}
-            onLogSession={(s) => setAllSessions(prev => [...prev, s])}
-            timetable={timetable} onUpdateTimetable={setTimetable}
+            onLogSession={handleLogSession}
+            timetable={timetable} onUpdateTimetable={updateTimetable}
           />
         );
       case 'create':
-        return <ReportForm students={students} currentUser={currentUser} onSave={(r) => { setReports(prev => [r, ...prev]); setActiveTab('dashboard'); }} />;
+        return <ReportForm students={students} currentUser={currentUser} onSave={saveReport} />;
       case 'reports':
-        return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={() => {}} onDeleteMessage={() => {}} onMarkResolved={() => {}} />;
+        return (
+          <ReportList 
+            reports={reports} students={students} currentUser={currentUser} 
+            onAddMessage={addMessage} onDeleteMessage={deleteMessage} onMarkResolved={markResolved}
+            onUpdateReport={updateReport}
+          />
+        );
+      case 'messages':
+        return (
+          <MessageCenter 
+            reports={reports} students={students} currentUser={currentUser} 
+            onAddMessage={addMessage} onDeleteMessage={deleteMessage} onMarkResolved={markResolved}
+          />
+        );
       case 'students':
-        return <StudentCenter students={students} reports={reports} allSessions={allSessions} currentUser={currentUser} onAddMessage={() => {}} onDeleteMessage={() => {}} onMarkResolved={() => {}} />;
+        return (
+          <StudentCenter 
+            students={students} reports={reports} allSessions={allSessions} currentUser={currentUser} 
+            onAddMessage={addMessage} onDeleteMessage={deleteMessage} onMarkResolved={markResolved}
+            onAddStudent={addStudent} onUpdateStudent={updateStudent} onDeleteStudent={deleteStudent}
+          />
+        );
+      case 'instructors':
+        return (
+          <InstructorCenter 
+            instructors={instructors} students={students} 
+            onAssignStudent={(sid, iid) => {
+              const s = students.find(item => item.id === sid);
+              if (s) updateStudent(sid, { instructorIds: [...new Set([...s.instructorIds, iid])] });
+            }} 
+            onRemoveStudent={(sid, iid) => {
+              const s = students.find(item => item.id === sid);
+              if (s) updateStudent(sid, { instructorIds: s.instructorIds.filter(id => id !== iid) });
+            }}
+            onUpdateInstructor={updateInstructor}
+            onAddInstructor={addInstructor}
+            onDeleteInstructor={deleteInstructor}
+          />
+        );
+      case 'salary':
+        return <SalaryCenter instructors={instructors} reports={reports} />;
+      case 'interview':
+        return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
+      case 'mock':
+        return (
+          <MockExamCenter 
+            students={students} mockExams={mockExams} 
+            role={currentUser.role} currentUserId={currentUser.id}
+            onSave={saveMockExam} onUpdate={updateMockExam} onDelete={deleteMockExam}
+          />
+        );
+      case 'word-king':
+        return (
+          <WordKing 
+            classroomBest={adminConfig.wordKingClassroomRecord} 
+            classroomHolder={adminConfig.wordKingClassroomHolder}
+            onNewClassroomRecord={(record, holder) => updateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder })}
+          />
+        );
       case 'timetable':
-        return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={setTimetable} />;
+        return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={updateTimetable} />;
       case 'settings':
         return <AdminSettings adminConfig={adminConfig} onUpdate={updateAdminConfig} />;
       default:
