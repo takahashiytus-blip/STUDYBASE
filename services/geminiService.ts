@@ -56,7 +56,8 @@ export const generateProfessionalReport = async (
 };
 
 /**
- * IQテストの結果から認知特性と学習アドバイスを生成
+ * 知能診断の結果から認知特性と学習アドバイスを生成
+ * 高効率な gemini-3-flash-preview を使用し、利用制限リスクを最小化
  */
 export const generateIQAnalysis = async (
   studentName: string,
@@ -67,14 +68,15 @@ export const generateIQAnalysis = async (
   return withRetry(async () => {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `知能診断の結果を分析し、保護者と本人向けのアドバイスを生成してください。
-      生徒名: ${studentName}, 学年: ${grade}
-      正解スコア: ${score}, 各カテゴリ得点(0-100%): 論理性:${breakdown.logical}%, 数値処理:${breakdown.numerical}%, 言語能力:${breakdown.verbal}%, 空間把握:${breakdown.spatial}%
+      contents: `知能・認知特性診断結果を分析してください。
+      生徒: ${studentName}, 学年: ${grade}, 総合スコア: ${score}/100
+      カテゴリ得点: 論理:${breakdown.logical}%, 数値:${breakdown.numerical}%, 言語:${breakdown.verbal}%, 空間:${breakdown.spatial}%
       
-      【出力内容の要件】
-      1. 数値の結果を肯定的に捉え、その生徒の「武器」となる認知特性を特定してください。
-      2. その特性を活かした具体的な「勉強法」を提案してください。
-      3. 苦手な分野がある場合、それをどう補うかの戦略を述べてください。`,
+      【要件】
+      1. 結果を前向きに捉え、最も高いスコアを「武器」として特定。
+      2. 特性を活かした学習スタイルを提案。
+      3. 苦手分野を補うための具体的な戦略を提示。
+      ※簡潔で説得力のある塾講師の口調で回答してください。`,
     });
     return response.text;
   });
@@ -127,14 +129,14 @@ export const generateInterviewMaterial = async (
             requiredStudyHours: { 
               type: Type.OBJECT, 
               properties: { 
-                totalWeekly: { type: Type.NUMBER }, 
+                totalWeekly: { type: Number(Type.INTEGER) }, 
                 subjectBreakdown: { 
                   type: Type.ARRAY, 
                   items: { 
                     type: Type.OBJECT, 
                     properties: { 
                       subject: { type: Type.STRING }, 
-                      hours: { type: Type.NUMBER }, 
+                      hours: { type: Number(Type.INTEGER) }, 
                       priorityReason: { type: Type.STRING } 
                     } 
                   } 
