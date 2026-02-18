@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Initialize the Google GenAI client following the guidelines
@@ -22,7 +21,12 @@ export const generateProfessionalReport = async (
     model: "gemini-3-flash-preview",
     contents: `プロの塾講師として保護者向けの報告書をJSON形式で生成してください。
     生徒:${studentName} 科目:${subject} 出欠:${attendanceStatus} 宿題完了率:${homeworkCompletion}% メモ:${rawNotes} 宿題内容:${homeworkAssigned}
-    weeklyPlanは必ず「1日目：[内容]」という形式で7日間分作成してください。`,
+    
+    【重要：weeklyPlanのフォーマット指示】
+    weeklyPlanは必ず「1日目：[内容]」から「7日目：[内容]」までの7日間分を作成してください。
+    各日件の間には必ず改行コード(\\n)を入れ、1つのフィールド内にまとめて記述してください。
+    例：
+    1日目：[内容]\\n2日目：[内容]\\n3日目：[内容]...`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Report, Student, UserRole, ReportMessage, AttendanceStatus } from '../types';
 
@@ -91,34 +90,37 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
       .replace(/\\n/g, '\n')
       .replace(/\r/g, '');
     
-    const lines = planText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    // 正規表現によるパース: "数字日目" をデリミタとして分割する
+    // 例: "1日目：国語 2日目：算数" -> ["1日目：国語", "2日目：算数"]
+    const dayRegex = /(\d+日目[:：\s]*)/g;
+    const parts = planText.split(dayRegex).filter(p => p.trim().length > 0);
     
+    // ラベルと内容を結合し直す
+    const combinedLines: string[] = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      if (parts[i] && parts[i+1]) {
+        combinedLines.push(parts[i] + parts[i+1]);
+      } else if (parts[i]) {
+        combinedLines.push(parts[i]);
+      }
+    }
+
     const steps = Array.from({ length: 7 }, (_, i) => {
       const dayNum = i + 1;
-      const dayPatterns = [
-        `${dayNum}日目:`, `${dayNum}日目：`, `${dayNum}日目`, 
-        `Day ${dayNum}:`, `Day ${dayNum}：`, `Day${dayNum}`
-      ];
+      const label = `${dayNum}日目`;
       
+      // combinedLinesから該当する日の内容を探す
+      const foundLine = combinedLines.find(line => 
+        line.startsWith(`${dayNum}日目`) || line.startsWith(`Day ${dayNum}`)
+      );
+
       let content = "復習を継続しましょう。";
-      
-      for (const pattern of dayPatterns) {
-        const foundLine = lines.find(l => l.startsWith(pattern));
-        if (foundLine) {
-          content = foundLine.substring(pattern.length).trim();
-          if (content.startsWith(':') || content.startsWith('：')) {
-            content = content.substring(1).trim();
-          }
-          break;
-        }
-      }
-      
-      // もしパターンで見つからない場合、配列のインデックスをそのまま使うなどのフォールバック
-      if (content === "復習を継続しましょう。" && lines[i]) {
-          content = lines[i].replace(/^\d+日目[:：\s]*/, "").trim();
+      if (foundLine) {
+        // ラベル部分を取り除く
+        content = foundLine.replace(/^\d+日目[:：\s]*/, "").replace(/^Day \d+[:：\s]*/, "").trim();
       }
 
-      return { label: `${dayNum}日目`, content };
+      return { label, content };
     });
 
     return (

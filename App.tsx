@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
@@ -61,7 +60,7 @@ const App: React.FC = () => {
 
   const fetchAllData = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
-      // LocalStorageからの復元を優先
+      // Restore from LocalStorage as priority for persistence
       const localReports = localStorage.getItem('sb_data_reports');
       const localStudents = localStorage.getItem('sb_data_students');
       const localInstructors = localStorage.getItem('sb_data_instructors');
