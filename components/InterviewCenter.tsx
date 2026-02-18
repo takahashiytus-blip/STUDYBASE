@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, Report, MockExam, AdminConfig } from '../types';
 import { generateInterviewMaterial } from '../services/geminiService';
+import { getLocalISOString, parseSafeDate } from '../App';
 
 interface InterviewCenterProps {
   students: Student[];
@@ -11,13 +12,14 @@ interface InterviewCenterProps {
 }
 
 const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mockExams, adminConfig }) => {
-  const now = new Date();
-  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0];
-  const today = now.toISOString().split('T')[0];
+  const todayLocal = getLocalISOString();
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const threeMonthsAgoStr = `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}-01`;
 
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [startDate, setStartDate] = useState(threeMonthsAgo);
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState(threeMonthsAgoStr);
+  const [endDate, setEndDate] = useState(todayLocal);
   const [isGenerating, setIsGenerating] = useState(false);
   const [interviewData, setInterviewData] = useState<any | null>(null);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
@@ -44,11 +46,12 @@ const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mo
   
   const filteredReports = useMemo(() => {
     if (!selectedStudentId) return [];
-    return reports.filter(r => 
-      r.studentId === selectedStudentId && 
-      r.date >= startDate && 
-      r.date <= endDate
-    );
+    const dStart = parseSafeDate(startDate);
+    const dEnd = parseSafeDate(endDate);
+    return reports.filter(r => {
+      const dR = parseSafeDate(r.date);
+      return r.studentId === selectedStudentId && dR >= dStart && dR <= dEnd;
+    });
   }, [selectedStudentId, reports, startDate, endDate]);
 
   const filteredExams = useMemo(() => {
@@ -78,7 +81,7 @@ const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mo
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDateDisplay = (dateStr: string) => {
     return dateStr.replace(/-/g, '/');
   };
 
@@ -89,7 +92,6 @@ const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mo
         <p className="text-slate-500 font-medium">AIが多角的なデータから合格への最短経路を算出します</p>
       </header>
 
-      {/* Analysis Control Panel - Using White Frames */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
         <div className="md:col-span-5">
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 ml-1">分析対象生徒</label>
@@ -135,9 +137,9 @@ const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mo
 
       <div className="flex items-center gap-2 text-xs font-black text-slate-400 px-4">
         <span>分析期間：</span>
-        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{formatDate(startDate)}</span>
+        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{formatDateDisplay(startDate)}</span>
         <span className="mx-1">〜</span>
-        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{formatDate(endDate)}</span>
+        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{formatDateDisplay(endDate)}</span>
       </div>
 
       {isGenerating && (

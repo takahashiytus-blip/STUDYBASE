@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Student, MockExam, UserRole, SubjectData } from '../types';
+import { getLocalISOString, generateUniqueId } from '../App';
 
 interface MockExamCenterProps {
   students: Student[];
@@ -65,14 +66,13 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [examName, setExamName] = useState('');
-  const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0]);
+  const [examDate, setExamDate] = useState(getLocalISOString());
   const [scores, setScores] = useState<Record<string, SubjectData>>({});
   const [showForm, setShowForm] = useState(false);
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
 
   const isPrivileged = role === 'instructor' || role === 'admin';
 
-  // Automatically select the user's own ID if they are a student or parent
   useEffect(() => {
     if (!isPrivileged) {
       setSelectedStudentId(currentUserId);
@@ -84,9 +84,14 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
   
   const studentExams = mockExams
     .filter(e => e.studentId === selectedStudentId)
-    .sort((a, b) => new Date(b.examDate).getTime() - new Date(a.examDate).getTime());
+    .sort((a, b) => {
+      const partsA = a.examDate.split('-').map(Number);
+      const partsB = b.examDate.split('-').map(Number);
+      const dA = new Date(partsA[0], partsA[1] - 1, partsA[2]);
+      const dB = new Date(partsB[0], partsB[1] - 1, partsB[2]);
+      return dB.getTime() - dA.getTime();
+    });
 
-  // Fixed: Updated to set undefined when empty, avoiding type errors with number comparison
   const handleValueChange = (id: string, field: keyof SubjectData, value: string) => {
     if (!isPrivileged) return;
     setScores(prev => ({
@@ -110,7 +115,7 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
 
   const resetForm = () => {
     setExamName('');
-    setExamDate(new Date().toISOString().split('T')[0]);
+    setExamDate(getLocalISOString());
     setScores({});
     setEditingExamId(null);
     setShowForm(false);
@@ -132,7 +137,7 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
       onUpdate(updatedExam);
     } else {
       const newExam: MockExam = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: generateUniqueId('exam'),
         studentId: selectedStudentId,
         examName,
         examDate,
@@ -238,7 +243,6 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
           <h2 className="text-3xl font-black text-slate-800">模試成績管理</h2>
           <p className="text-slate-500 font-medium">生徒の外部模試結果（得点・偏差値）を記録し、推移を分析します</p>
         </div>
-        {/* Only privileged users can add new records */}
         {isPrivileged && selectedStudentId && !showForm && (
           <button 
             onClick={() => { resetForm(); setShowForm(true); }}
@@ -249,7 +253,6 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
         )}
       </header>
 
-      {/* Hide student selection if not privileged (student/parent only sees their own) */}
       {isPrivileged && (
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col md:flex-row items-center gap-6 no-print">
           <div className="flex-1 w-full">
@@ -271,7 +274,6 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
         </div>
       )}
 
-      {/* View Title for Students/Parents */}
       {!isPrivileged && selectedStudent && (
         <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-lg text-white animate-fadeIn">
           <div className="flex items-center gap-4">
@@ -359,7 +361,6 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{exam.examDate}</p>
                   <h4 className="text-xl font-black text-slate-800">{exam.examName}</h4>
                 </div>
-                {/* Only privileged users can edit or delete */}
                 {isPrivileged && (
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
                     <button 
@@ -383,7 +384,6 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
               </div>
               <div className="p-8">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {/* Fixed: Comparison of number to empty string is not allowed in TS */}
                   {Object.entries(exam.scores).filter(([_, data]) => data.score !== undefined || data.deviation !== undefined).map(([id, data]) => {
                     let label = id;
                     const jh = JUNIOR_HIGH_SUBJECTS.find(s => s.id === id);

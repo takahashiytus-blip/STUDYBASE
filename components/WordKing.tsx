@@ -1,11 +1,15 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { validateDisplayName } from '../services/geminiService';
 import { WORD_BANK, Question } from '../constants/wordData';
+import { getLocalISOString } from '../App';
 
 interface WordKingProps {
   classroomBest: number;
   classroomHolder: string;
   userId: string;
+  personalBestFromDB: number; 
+  onPersonalBestUpdate: (newScore: number) => void; 
   onNewClassroomRecord: (newScore: number, holderName: string) => void;
 }
 
@@ -19,15 +23,21 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 };
 
 const TIME_LIMIT = 5.0; 
-const DAILY_LIMIT = 10; // 1日10回に設定
+const DAILY_LIMIT = 10; 
 
-const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, userId, onNewClassroomRecord }) => {
+const WordKing: React.FC<WordKingProps> = ({ 
+  classroomBest, 
+  classroomHolder, 
+  userId, 
+  personalBestFromDB, 
+  onPersonalBestUpdate, 
+  onNewClassroomRecord 
+}) => {
   const [gameState, setGameState] = useState<'idle' | 'playing' | 'gameover' | 'new-record'>('idle');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [displayChoices, setDisplayChoices] = useState<string[]>([]);
   const [streak, setStreak] = useState(0);
-  const [highScore, setHighScore] = useState(Number(localStorage.getItem(`wordKingHighScore_${userId}`) || 0));
   const [timeLeft, setTimeLeft] = useState(TIME_LIMIT);
   const [isWrong, setIsWrong] = useState(false);
   const [dailyCount, setDailyCount] = useState(0);
@@ -39,9 +49,8 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
 
   const timerRef = useRef<number | null>(null);
 
-  // ユーザーIDに紐づくキーを使用して、個別のカウントを管理
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalISOString();
     const lastDateKey = `wordKing_lastDate_${userId}`;
     const countKey = `wordKing_dailyCount_${userId}`;
     
@@ -55,9 +64,6 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
     } else {
       setDailyCount(savedCount);
     }
-    
-    // 自身のハイスコアもリロード
-    setHighScore(Number(localStorage.getItem(`wordKingHighScore_${userId}`) || 0));
   }, [userId]);
 
   useEffect(() => {
@@ -87,9 +93,8 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
   const endGame = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     
-    if (streak > highScore) {
-      setHighScore(streak);
-      localStorage.setItem(`wordKingHighScore_${userId}`, streak.toString());
+    if (streak > personalBestFromDB) {
+      onPersonalBestUpdate(streak);
     }
 
     if (streak > classroomBest) {
@@ -97,7 +102,7 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
     } else {
       setGameState('gameover');
     }
-  }, [streak, highScore, classroomBest, userId]);
+  }, [streak, personalBestFromDB, classroomBest, onPersonalBestUpdate]);
 
   useEffect(() => {
     if (gameState === 'playing') {
@@ -177,7 +182,7 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
           </div>
           <div className="text-right border-l border-slate-100 pl-6">
             <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Your Best</p>
-            <p className="text-2xl font-black text-indigo-600">{highScore}</p>
+            <p className="text-2xl font-black text-indigo-600">{personalBestFromDB}</p>
           </div>
         </div>
       </div>
@@ -259,7 +264,7 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
                </div>
                <div className="text-center border-l border-slate-50 pl-10">
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Personal Best</p>
-                 <p className="text-5xl font-black text-indigo-600">{highScore}</p>
+                 <p className="text-5xl font-black text-indigo-600">{personalBestFromDB}</p>
                </div>
             </div>
             

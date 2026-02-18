@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Report, Student, UserRole, ReportMessage, AttendanceStatus } from '../types';
+import { parseSafeDate } from '../App';
 
 interface ReportListProps {
   reports: Report[];
@@ -20,10 +22,16 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
   const [newMessage, setNewMessage] = useState('');
 
   const displayReports = useMemo(() => {
-    if (currentUser.role === 'admin' || currentUser.role === 'instructor') {
-      return reports;
-    }
-    return reports.filter(r => r.studentId === currentUser.id);
+    const baseReports = (currentUser.role === 'admin' || currentUser.role === 'instructor')
+      ? reports
+      : reports.filter(r => r.studentId === currentUser.id);
+    
+    // 日付による確実な降順ソート
+    return [...baseReports].sort((a, b) => {
+      const timeA = parseSafeDate(a.date).getTime();
+      const timeB = parseSafeDate(b.date).getTime();
+      return timeB - timeA;
+    });
   }, [reports, currentUser]);
 
   const selectedReport = useMemo(() => displayReports.find(r => r.id === selectedReportId), [displayReports, selectedReportId]);
@@ -31,8 +39,16 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
   const isPrivileged = currentUser.role === 'instructor' || currentUser.role === 'admin';
 
   useEffect(() => {
-    if (selectedReport) setEditBuffer(JSON.parse(JSON.stringify(selectedReport)));
-    else { setEditBuffer(null); setIsEditingContent(false); }
+    if (selectedReport) {
+      setEditBuffer(JSON.parse(JSON.stringify(selectedReport)));
+      // モーダル表示時に背景のスクロールを抑制 (iOS Safari対応)
+      document.body.style.overflow = 'hidden';
+    } else {
+      setEditBuffer(null);
+      setIsEditingContent(false);
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
   }, [selectedReport]);
 
   const handleUpdateBuffer = (field: string, value: any, isNested: boolean = false) => {
@@ -85,41 +101,21 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
   const weeklyTimeline = useMemo(() => {
     if (!selectedReport?.generatedContent.weeklyPlan) return null;
     
-    // AI出力に含まれるエスケープされた改行コードなどをクリーンアップ
-    const planText = selectedReport.generatedContent.weeklyPlan
-      .replace(/\\n/g, '\n')
-      .replace(/\r/g, '');
-    
-    // 正規表現によるパース: "数字日目" をデリミタとして分割する
-    // 例: "1日目：国語 2日目：算数" -> ["1日目：国語", "2日目：算数"]
+    const planText = selectedReport.generatedContent.weeklyPlan.replace(/\\n/g, '\n').replace(/\r/g, '');
     const dayRegex = /(\d+日目[:：\s]*)/g;
     const parts = planText.split(dayRegex).filter(p => p.trim().length > 0);
     
-    // ラベルと内容を結合し直す
     const combinedLines: string[] = [];
     for (let i = 0; i < parts.length; i += 2) {
-      if (parts[i] && parts[i+1]) {
-        combinedLines.push(parts[i] + parts[i+1]);
-      } else if (parts[i]) {
-        combinedLines.push(parts[i]);
-      }
+      if (parts[i] && parts[i+1]) combinedLines.push(parts[i] + parts[i+1]);
+      else if (parts[i]) combinedLines.push(parts[i]);
     }
 
     const steps = Array.from({ length: 7 }, (_, i) => {
       const dayNum = i + 1;
       const label = `${dayNum}日目`;
-      
-      // combinedLinesから該当する日の内容を探す
-      const foundLine = combinedLines.find(line => 
-        line.startsWith(`${dayNum}日目`) || line.startsWith(`Day ${dayNum}`)
-      );
-
-      let content = "復習を継続しましょう。";
-      if (foundLine) {
-        // ラベル部分を取り除く
-        content = foundLine.replace(/^\d+日目[:：\s]*/, "").replace(/^Day \d+[:：\s]*/, "").trim();
-      }
-
+      const foundLine = combinedLines.find(line => line.startsWith(`${dayNum}日目`) || line.startsWith(`Day ${dayNum}`));
+      let content = foundLine ? foundLine.replace(/^\d+日目[:：\s]*/, "").replace(/^Day \d+[:：\s]*/, "").trim() : "復習を継続しましょう。";
       return { label, content };
     });
 
@@ -150,7 +146,7 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {displayReports.length === 0 ? <p className="col-span-full py-20 text-center text-slate-400 font-black">報告書がありません</p> : 
-          displayReports.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((report) => (
+          displayReports.map((report) => (
             <div key={report.id} onClick={() => setSelectedReportId(report.id)} className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
               <div className="flex justify-between items-start mb-4">
                 <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase">{report.subject}</span>
@@ -170,7 +166,6 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
                   ))}
                 </div>
               )}
-
               <p className="text-[14px] text-slate-600 line-clamp-2 italic">「{report.generatedContent.messageToParents}」</p>
               {report.needsAction && <span className="mt-4 block w-fit text-[9px] font-black bg-rose-500 text-white px-3 py-1 rounded-full animate-pulse">未返信あり</span>}
             </div>
@@ -178,8 +173,8 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
       </div>
 
       {selectedReport && editBuffer && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[100] flex justify-center items-center p-2 md:p-4">
-          <div className="bg-white w-full h-full max-h-[96vh] md:max-h-[92vh] max-w-[840px] rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col overflow-hidden animate-slideUp border border-white/5">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[100] flex justify-center items-center p-2 md:p-4 overscroll-none">
+          <div className="bg-white w-full h-full max-h-[96vh] md:max-h-[92vh] max-w-[840px] rounded-[2rem] md:rounded-[3rem] shadow-2xl flex flex-col overflow-hidden animate-slideUp border border-white/5 overscroll-contain">
             <div className={`shrink-0 ${isEditingContent ? 'bg-amber-600' : 'bg-[#0f172a]'} text-white px-6 py-6 md:px-10 md:py-10 flex justify-between items-center transition-colors border-b border-white/5`}>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-3">
@@ -196,10 +191,7 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
               </div>
             </div>
             
-            <div 
-              className="flex-1 overflow-y-auto bg-[#f8fafc] p-6 md:p-10 space-y-6 md:space-y-10 focus:outline-none"
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
+            <div className="flex-1 overflow-y-auto bg-[#f8fafc] p-6 md:p-10 space-y-6 md:space-y-10 focus:outline-none" style={{ WebkitOverflowScrolling: 'touch' }}>
               <section className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500/30"></div>
                 <h4 className="text-[11px] font-black text-slate-400 mb-4 md:mb-6 uppercase tracking-widest">指導の概略</h4>
@@ -263,13 +255,7 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
                         <div className={`group relative max-w-[85%] p-4 rounded-2xl text-sm font-bold shadow-sm ${msg.senderId === currentUser.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-800'}`}>
                           {msg.text}
                           {msg.senderId === currentUser.id && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }}
-                              className="absolute -left-8 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity border border-rose-100 hover:bg-rose-500 hover:text-white"
-                              title="メッセージを削除"
-                            >
-                              ✕
-                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }} className="absolute -left-8 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity border border-rose-100 hover:bg-rose-500 hover:text-white">✕</button>
                           )}
                         </div>
                         <span className="text-[9px] text-slate-400 mt-1.5 font-bold tracking-tight">{msg.senderName} • {msg.timestamp}</span>
@@ -278,19 +264,12 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={newMessage} 
-                    onChange={(e) => setNewMessage(e.target.value)} 
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="講師・保護者へ相談を入力..." 
-                    className="flex-1 bg-white border-2 border-slate-100 rounded-xl px-5 py-3 text-sm text-slate-900 outline-none focus:border-indigo-500 font-bold shadow-sm transition-all"
-                  />
-                  <button onClick={handleSendMessage} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm shadow-md hover:bg-indigo-700 active:scale-95 transition-all">送信</button>
+                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="講師・保護者へ相談を入力..." className="flex-1 bg-white border-2 border-slate-100 rounded-xl px-5 py-3 text-sm text-slate-900 outline-none focus:border-indigo-500 font-bold shadow-sm transition-all" />
+                  <button onClick={handleSendMessage} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm shadow-md hover:bg-indigo-700 transition-all active:scale-95">送信</button>
                 </div>
               </section>
 
-              <button onClick={() => setSelectedReportId(null)} className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs hover:bg-black transition-all shadow-2xl tracking-[0.2em] uppercase active:scale-[0.98]">Close Report</button>
+              <button onClick={() => setSelectedReportId(null)} className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs hover:bg-black transition-all shadow-2xl tracking-[0.2em] uppercase active:scale-[0.98] mb-4">Close Report</button>
             </div>
           </div>
         </div>

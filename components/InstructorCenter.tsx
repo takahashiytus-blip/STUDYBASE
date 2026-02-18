@@ -42,10 +42,6 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
     ? students.filter(s => !s.instructorIds.includes(selectedInstructorId))
     : [];
 
-  const getInstructorNames = (ids: string[]) => {
-    return ids.map(id => instructors.find(i => i.id === id)?.name || id).join(', ');
-  };
-
   const handleStartEdit = () => {
     if (!selectedInstructor) return;
     setEditName(selectedInstructor.name);
@@ -83,6 +79,8 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
       setIsEditing(false);
     }
   };
+
+  const inputStyle = "w-full px-5 py-3 rounded-2xl border-2 border-slate-200 bg-white text-slate-900 font-bold outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm placeholder:text-slate-300";
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -321,36 +319,67 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
 
       {/* 新規講師登録モーダル */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-fadeIn">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
-            <div className="bg-indigo-600 p-8 text-white relative">
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 md:p-6 animate-fadeIn">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp flex flex-col">
+            <div className="bg-indigo-600 p-8 text-white relative shrink-0">
               <h3 className="text-xl font-black">新規講師登録</h3>
+              <p className="text-indigo-100 text-xs mt-1 font-bold">基本情報とログイン権限を設定します</p>
               <button onClick={() => setShowAddModal(false)} className="absolute top-6 right-6 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">✕</button>
             </div>
-            <form onSubmit={handleAddSubmit} className="p-10 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleAddSubmit} className="p-8 md:p-10 space-y-6 overflow-y-auto flex-1 focus:outline-none">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="space-y-2">
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">氏名</label>
-                  <input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({...addFormData, name: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">講師氏名</label>
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="例: 山田 太郎"
+                    value={addFormData.name} 
+                    onChange={(e) => setAddFormData({...addFormData, name: e.target.value})} 
+                    className={inputStyle} 
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">担当・専門</label>
-                  <input required type="text" value={addFormData.specialty} onChange={(e) => setAddFormData({...addFormData, specialty: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="例: 数学・物理"
+                    value={addFormData.specialty} 
+                    onChange={(e) => setAddFormData({...addFormData, specialty: e.target.value})} 
+                    className={inputStyle} 
+                  />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              
+              <div className="pt-4 border-t border-slate-100 space-y-5">
                 <div className="space-y-2">
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">ログインID</label>
-                  <input required type="text" value={addFormData.loginId} onChange={(e) => setAddFormData({...addFormData, loginId: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                  <label className="block text-xs font-black text-indigo-500 uppercase tracking-widest ml-1">ログインID（半角英数字）</label>
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="instructor01"
+                    value={addFormData.loginId} 
+                    onChange={(e) => setAddFormData({...addFormData, loginId: e.target.value})} 
+                    className={inputStyle} 
+                  />
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">パスワード</label>
-                  <input required type="text" value={addFormData.password} onChange={(e) => setAddFormData({...addFormData, password: e.target.value})} className="w-full px-5 py-3 rounded-2xl border-2 border-slate-100 font-bold outline-none focus:border-indigo-500" />
+                  <label className="block text-xs font-black text-indigo-500 uppercase tracking-widest ml-1">初期パスワード</label>
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="password123"
+                    value={addFormData.password} 
+                    onChange={(e) => setAddFormData({...addFormData, password: e.target.value})} 
+                    className={inputStyle} 
+                  />
                 </div>
               </div>
-              <div className="pt-4 flex gap-4">
-                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-4 font-black text-slate-400">キャンセル</button>
-                <button type="submit" className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">登録する</button>
+
+              <div className="pt-6 flex gap-4">
+                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-4 font-black text-slate-400 hover:bg-slate-50 rounded-2xl transition-colors">キャンセル</button>
+                <button type="submit" className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95">講師を登録する</button>
               </div>
             </form>
           </div>

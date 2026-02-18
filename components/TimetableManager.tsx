@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { TimetableEntry, Student, Instructor } from '../types';
+import { generateUniqueId } from '../App';
 
 interface TimetableManagerProps {
   timetable: TimetableEntry[];
@@ -32,7 +33,7 @@ const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, students
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     const newEntry: TimetableEntry = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateUniqueId('t'),
       dayOfWeek: Number(formData.dayOfWeek) || 0,
       startTime: formData.startTime || '17:00',
       endTime: formData.endTime || '18:30',

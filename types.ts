@@ -13,6 +13,13 @@ export interface Student {
   loginId?: string;
   password?: string;
   iqHistory?: IQResult[]; // IQテスト履歴
+  wordKingBest?: number; // 英単語王のパーソナルベスト
+  targets?: {
+    label1: string;
+    date1: string;
+    label2: string;
+    date2: string;
+  }; // 追加: カウントダウン目標の同期用
 }
 
 export interface IQResult {

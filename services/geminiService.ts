@@ -129,14 +129,16 @@ export const generateInterviewMaterial = async (
             requiredStudyHours: { 
               type: Type.OBJECT, 
               properties: { 
-                totalWeekly: { type: Number(Type.INTEGER) }, 
+                // Fix: Corrected type from invalid Number(Type.INTEGER) to Type.INTEGER
+                totalWeekly: { type: Type.INTEGER }, 
                 subjectBreakdown: { 
                   type: Type.ARRAY, 
                   items: { 
                     type: Type.OBJECT, 
                     properties: { 
                       subject: { type: Type.STRING }, 
-                      hours: { type: Number(Type.INTEGER) }, 
+                      // Fix: Corrected type from invalid Number(Type.INTEGER) to Type.INTEGER
+                      hours: { type: Type.INTEGER }, 
                       priorityReason: { type: Type.STRING } 
                     } 
                   } 

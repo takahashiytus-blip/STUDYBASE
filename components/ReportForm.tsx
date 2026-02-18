@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Student, Report, AttendanceStatus } from '../types';
 import { generateProfessionalReport } from '../services/geminiService';
+import { generateUniqueId, getLocalISOString } from '../App';
 
 interface ReportFormProps {
   students: Student[];
@@ -75,8 +76,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     
     try {
       const student = students.find(s => s.id === selectedStudentId);
-      // 通信エラー等でリトライが発生した場合の検知はサービス側で行われるが
-      // ユーザーへの表示を切り替えるためのタイマー
       const timeout = setTimeout(() => setIsRetrying(true), 10000);
 
       const content = await generateProfessionalReport(
@@ -110,9 +109,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   const handleSave = () => {
     if (!generatedPreview) return;
     const newReport: Report = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateUniqueId('rep'),
       studentId: selectedStudentId,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalISOString(),
       subject,
       instructorName: currentUser.name,
       sessionYear,
@@ -275,9 +274,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
             <div className="flex-1 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
               <section>
                 <h4 className="text-[10px] font-black text-indigo-400 uppercase mb-2 tracking-widest">指導内容要約</h4>
-                <textarea value={generatedPreview.lessonSummary} onChange={(e) => handlePreviewChange('lessonSummary', e.target.value)} className="w-full p-5 rounded-2xl border-2 border-slate-100 text-[14px] font-bold leading-relaxed text-slate-700 bg-slate-50/50 focus:bg-white focus:border-indigo-400 outline-none transition-all" rows={4} />
+                <textarea value={generatedPreview.lessonSummary} onChange={(e) => handlePreviewChange('lessonSummary', e.target.value)} className="w-full min-h-[120px] rounded-2xl border-2 border-slate-100 text-[14px] font-bold leading-relaxed text-slate-700 bg-slate-50/50 focus:bg-white focus:border-indigo-400 outline-none transition-all" rows={4} />
               </section>
               <section className="bg-indigo-950 text-white p-8 rounded-[2.5rem] border border-white/10 shadow-lg relative">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
                 <h4 className="text-[10px] font-black text-indigo-200 uppercase mb-4 tracking-[0.2em] relative z-10">AI日割り学習計画</h4>
                 <textarea value={generatedPreview.weeklyPlan} onChange={(e) => handlePreviewChange('weeklyPlan', e.target.value)} className="w-full bg-black/30 border-2 border-white/5 rounded-2xl p-5 text-[14px] leading-relaxed font-bold text-indigo-50 outline-none focus:border-indigo-500 focus:bg-black/40 transition-all relative z-10" rows={10} />
               </section>

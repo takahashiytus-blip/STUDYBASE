@@ -1,27 +1,43 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IQ_QUESTION_BANK, IQQuestion, IQCategory } from '../constants/iqTestData';
 import { generateIQAnalysis } from '../services/geminiService';
+import { IQResult } from '../types';
+import { getLocalISOString } from '../App';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 
 interface IQTestProps {
   studentName: string;
   grade: string;
+  userId: string;
+  iqHistory: IQResult[];
   onComplete: (score: number, breakdown: any, analysis: string) => void;
 }
 
-const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
+const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHistory, onComplete }) => {
   const [gameState, setGameState] = useState<'idle' | 'testing' | 'analyzing' | 'finished'>('idle');
   const [currentQuestions, setCurrentQuestions] = useState<IQQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [scoreData, setScoreData] = useState<any>(null);
+  const [isLimitReached, setIsLimitReached] = useState(false);
+
+  useEffect(() => {
+    const today = getLocalISOString();
+    const hasTestedTodayInHistory = iqHistory && iqHistory.some(res => res.date === today);
+    const lastTestDateLocal = localStorage.getItem(`lastIQTestDate_${userId}`);
+    
+    if (hasTestedTodayInHistory || lastTestDateLocal === today) {
+      setIsLimitReached(true);
+    }
+  }, [userId, iqHistory]);
 
   const startTest = () => {
-    // 200問のバンクからランダムに6問を抽出
+    if (isLimitReached) return;
+
     const shuffled = [...IQ_QUESTION_BANK].sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, 6);
+    const selected = shuffled.slice(0, 10);
     
     setCurrentQuestions(selected);
     setCurrentIndex(0);
@@ -62,10 +78,10 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
     });
 
     const percentageBreakdown = {
-      logical: (categoryScores.logical.earned / (categoryScores.logical.total || 1)) * 100,
-      numerical: (categoryScores.numerical.earned / (categoryScores.numerical.total || 1)) * 100,
-      verbal: (categoryScores.verbal.earned / (categoryScores.verbal.total || 1)) * 100,
-      spatial: (categoryScores.spatial.earned / (categoryScores.spatial.total || 1)) * 100
+      logical: Math.round((categoryScores.logical.earned / (categoryScores.logical.total || 1)) * 100),
+      numerical: Math.round((categoryScores.numerical.earned / (categoryScores.numerical.total || 1)) * 100),
+      verbal: Math.round((categoryScores.verbal.earned / (categoryScores.verbal.total || 1)) * 100),
+      spatial: Math.round((categoryScores.spatial.earned / (categoryScores.spatial.total || 1)) * 100)
     };
 
     const finalScore = Math.round((earnedWeight / totalWeight) * 100);
@@ -83,6 +99,9 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
       
       setScoreData({ finalScore, radarData });
       setGameState('finished');
+      
+      const today = getLocalISOString();
+      localStorage.setItem(`lastIQTestDate_${userId}`, today);
       onComplete(finalScore, percentageBreakdown, analysis || "");
     } catch (error) {
       setAiAnalysis("現在AI分析が利用できません。スコアのみ表示します。");
@@ -99,16 +118,24 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
           <div className="text-8xl">🧠</div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tighter italic">AI 知能・認知特性診断</h2>
           <p className="text-slate-500 font-bold max-w-lg mx-auto leading-relaxed">
-            論理・数値・言語・空間の4項目から、あなたの「学びの特性」を明らかにします。200問の問題バンクからランダムに選ばれた6つの難問に挑戦しましょう。
+            論理・数値・言語・空間の4項目から、あなたの「学びの特性」を明らかにします。
           </p>
         </div>
         <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm max-w-sm mx-auto space-y-6">
           <ul className="text-left text-sm font-bold text-slate-600 space-y-3">
-            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 精選された 6 問をランダム出題</li>
-            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 毎回内容が変わる実力診断</li>
-            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 終了後にAI詳細レポートを生成</li>
+            <li className="flex items-center gap-3"><span className="text-indigo-500 font-black">10</span> 問の実戦テストに挑戦</li>
+            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> アカウント共通の受検制限</li>
+            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 1日 <span className="text-rose-500 font-black">1回</span> 限定（全端末共通）</li>
           </ul>
-          <button onClick={startTest} className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95">診断を開始する</button>
+          
+          {isLimitReached ? (
+            <div className="p-6 bg-rose-50 border-2 border-rose-100 rounded-3xl">
+              <p className="text-rose-600 font-black text-sm">本日の診断は完了しています。<br/>また明日挑戦してください。</p>
+              <p className="text-[10px] text-slate-400 mt-2">※別端末での受検結果も同期されています</p>
+            </div>
+          ) : (
+            <button onClick={startTest} className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95">診断を開始する</button>
+          )}
         </div>
       </div>
     );
@@ -140,9 +167,16 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
               <button 
                 key={i} 
                 onClick={() => handleAnswer(choice)}
-                className="bg-slate-50 border-2 border-slate-100 p-6 rounded-2xl text-lg font-bold text-slate-700 hover:bg-indigo-50 hover:border-indigo-500 hover:text-indigo-700 transition-all active:scale-[0.98] text-center"
+                className="bg-slate-50 border-2 border-slate-100 p-6 rounded-2xl text-lg font-bold text-slate-700 hover:bg-indigo-50 hover:border-indigo-500 hover:text-indigo-700 transition-all active:scale-[0.98] text-center flex flex-col items-center justify-center gap-2"
               >
-                {choice}
+                {currentQ.choiceSvgs && currentQ.choiceSvgs[i] ? (
+                  <>
+                    <div className="p-2 bg-white rounded-xl shadow-sm" dangerouslySetInnerHTML={{ __html: currentQ.choiceSvgs[i] }} />
+                    <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{choice}</span>
+                  </>
+                ) : (
+                  choice
+                )}
               </button>
             ))}
           </div>
@@ -181,7 +215,13 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
           <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 h-[400px]">
             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">認知特性マップ</h4>
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={scoreData.radarData}>
+              <RadarChart 
+                cx="50%" 
+                cy="50%" 
+                outerRadius="65%" 
+                data={scoreData.radarData}
+                margin={{ top: 10, right: 40, bottom: 10, left: 40 }}
+              >
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
                 <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />

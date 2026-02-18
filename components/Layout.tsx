@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserRole, Report } from '../types';
 import { ROLE_LABELS } from '../constants';
 
@@ -52,13 +52,20 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
     setIsMenuOpen(false); 
   };
 
+  // メニュー開閉時に背後のスクロールを制御
+  useEffect(() => {
+    if (isMenuOpen) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [isMenuOpen]);
+
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] bg-[#f8fafc] overflow-hidden">
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-[#0f172a] text-white p-4 flex justify-between items-center shadow-lg z-[70] h-16 border-b border-white/5">
+      {/* Mobile Header - Added safe-area padding for notch devices */}
+      <div className="md:hidden fixed top-0 left-0 right-0 bg-[#0f172a] text-white px-4 flex justify-between items-center shadow-lg z-[70] h-[calc(64px+env(safe-area-inset-top))] border-b border-white/5 pt-[env(safe-area-inset-top)]">
         <div className="flex flex-col items-center flex-1">
           <span className="text-[8px] font-bold tracking-[0.2em] text-indigo-300 uppercase leading-none mb-1">受験専門塾</span>
-          <h1 className="text-xl font-black tracking-tighter leading-none">学士館</h1>
+          <h1 className="text-xl font-black tracking-tighter leading-none uppercase">Gakushikan</h1>
         </div>
         <button 
           onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -70,22 +77,22 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
 
       {isMenuOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[71] md:hidden"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[71] md:hidden"
           onClick={() => setIsMenuOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Added safe-area padding for home indicators */}
       <aside className={`
-        fixed md:relative inset-y-0 left-0 w-72 md:w-64 bg-[#0f172a] text-white flex flex-col shrink-0 z-[75] shadow-2xl transition-transform duration-300 ease-in-out
+        fixed md:relative inset-y-0 left-0 w-72 md:w-64 bg-[#0f172a] text-white flex flex-col shrink-0 z-[75] shadow-2xl transition-transform duration-300 ease-in-out pb-[env(safe-area-inset-bottom)]
         ${isMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-8 shrink-0 hidden md:flex flex-col items-center justify-center border-b border-white/5 bg-black/20">
           <span className="text-[10px] font-black tracking-[0.3em] text-indigo-400 uppercase mb-1 opacity-80">受験専門塾</span>
-          <h1 className="text-3xl font-black tracking-tighter text-white">学士館</h1>
+          <h1 className="text-3xl font-black tracking-tighter text-white uppercase">Gakushikan</h1>
         </div>
         
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -121,7 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
           </div>
           <button
             onClick={onLogout}
-            className="w-full flex items-center justify-center gap-2 text-xs bg-white/5 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 px-4 py-3 rounded-xl transition-all duration-200 font-bold border border-white/5"
+            className="w-full flex items-center justify-center gap-2 text-xs bg-white/5 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 px-4 py-3 rounded-xl transition-all duration-200 font-bold border border-white/5 active:scale-95"
           >
             ログアウト
           </button>
@@ -129,10 +136,10 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
       </aside>
 
       <main 
-        className="flex-1 overflow-y-auto relative bg-[#f8fafc] focus:outline-none scroll-smooth pt-16 md:pt-0"
+        className="flex-1 overflow-y-auto relative bg-[#f8fafc] focus:outline-none scroll-smooth pt-[calc(64px+env(safe-area-inset-top))] md:pt-0"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        <div className="max-w-[1200px] mx-auto p-5 md:p-12 pb-24">
+        <div className="max-w-[1200px] mx-auto p-5 md:p-12 pb-[calc(24px+env(safe-area-inset-bottom))]">
           {children}
         </div>
       </main>
