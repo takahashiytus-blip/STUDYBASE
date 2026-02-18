@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
@@ -53,12 +54,28 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : DEFAULT_ADMIN;
   });
 
+  // LocalStorage helper
+  const saveToLocal = (key: string, data: any) => {
+    localStorage.setItem(`sb_data_${key}`, JSON.stringify(data));
+  };
+
   const fetchAllData = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
-      setReports(MOCK_REPORTS);
-      setStudents(MOCK_STUDENTS);
-      setInstructors(MOCK_INSTRUCTORS);
-      setTimetable(MOCK_TIMETABLE);
+      // LocalStorageからの復元を優先
+      const localReports = localStorage.getItem('sb_data_reports');
+      const localStudents = localStorage.getItem('sb_data_students');
+      const localInstructors = localStorage.getItem('sb_data_instructors');
+      const localTimetable = localStorage.getItem('sb_data_timetable');
+      const localMockExams = localStorage.getItem('sb_data_mockExams');
+      const localSessions = localStorage.getItem('sb_data_sessions');
+
+      setReports(localReports ? JSON.parse(localReports) : MOCK_REPORTS);
+      setStudents(localStudents ? JSON.parse(localStudents) : MOCK_STUDENTS);
+      setInstructors(localInstructors ? JSON.parse(localInstructors) : MOCK_INSTRUCTORS);
+      setTimetable(localTimetable ? JSON.parse(localTimetable) : MOCK_TIMETABLE);
+      setMockExams(localMockExams ? JSON.parse(localMockExams) : []);
+      setAllSessions(localSessions ? JSON.parse(localSessions) : []);
+      
       setIsLoading(false);
       return;
     }
@@ -90,27 +107,30 @@ const App: React.FC = () => {
 
       const { data: studentData } = await supabase.from('students').select('*');
       if (studentData) {
-        setStudents(studentData.map(s => ({
+        const mapped = studentData.map(s => ({
           id: s.id, name: s.name, grade: s.grade,
           loginId: s.login_id, password: s.password,
-          // Corrected mapping: targetFaculty must match the property in Student interface
           targetSchool: s.target_school, targetFaculty: s.target_faculty,
           weeklyInstructorMessage: s.weekly_instructor_message,
           instructorIds: s.instructor_ids || []
-        })));
+        }));
+        setStudents(mapped);
+        saveToLocal('students', mapped);
       }
 
       const { data: instructorData } = await supabase.from('instructors').select('*');
       if (instructorData) {
-        setInstructors(instructorData.map(i => ({
+        const mapped = instructorData.map(i => ({
           id: i.id, name: i.name, specialty: i.specialty,
           loginId: i.login_id, password: i.password
-        })));
+        }));
+        setInstructors(mapped);
+        saveToLocal('instructors', mapped);
       }
 
       const { data: reportData } = await supabase.from('reports').select('*').order('date', { ascending: false });
       if (reportData) {
-        setReports(reportData.map(r => ({
+        const mapped = reportData.map(r => ({
           id: r.id, studentId: r.student_id, date: r.date, subject: r.subject,
           instructorName: r.instructor_name, sessionYear: r.session_year,
           sessionMonth: r.session_month, sessionCount: r.session_count,
@@ -118,29 +138,41 @@ const App: React.FC = () => {
           homeworkAssigned: r.homework_assigned, homeworkCompletion: r.homework_completion,
           proposedSelfStudyDays: r.proposed_self_study_days, generatedContent: r.generated_content,
           quizScore: r.quiz_score, messages: r.messages || [], needsAction: r.needs_action
-        })));
+        }));
+        setReports(mapped);
+        saveToLocal('reports', mapped);
       }
 
       const { data: mockData } = await supabase.from('mock_exams').select('*');
-      if (mockData) setMockExams(mockData.map(m => ({
-        id: m.id, studentId: m.student_id, examName: m.exam_name,
-        examDate: m.exam_date, scores: m.scores || {}
-      })));
+      if (mockData) {
+        const mapped = mockData.map(m => ({
+          id: m.id, studentId: m.student_id, examName: m.exam_name,
+          examDate: m.exam_date, scores: m.scores || {}
+        }));
+        setMockExams(mapped);
+        saveToLocal('mockExams', mapped);
+      }
 
       const { data: timetableData } = await supabase.from('timetable').select('*');
       if (timetableData) {
-        setTimetable(timetableData.map(t => ({
+        const mapped = timetableData.map(t => ({
           id: t.id, dayOfWeek: t.day_of_week, startTime: t.start_time,
           endTime: t.end_time, subject: t.subject, studentId: t.student_id,
           instructorId: t.instructor_id, room: t.room
-        })));
+        }));
+        setTimetable(mapped);
+        saveToLocal('timetable', mapped);
       }
 
       const { data: sessionData } = await supabase.from('study_sessions').select('*');
-      if (sessionData) setAllSessions(sessionData.map(s => ({
-        id: s.id, studentId: s.student_id, date: s.date,
-        subject: s.subject, minutes: s.minutes
-      })));
+      if (sessionData) {
+        const mapped = sessionData.map(s => ({
+          id: s.id, studentId: s.student_id, date: s.date,
+          subject: s.subject, minutes: s.minutes
+        }));
+        setAllSessions(mapped);
+        saveToLocal('sessions', mapped);
+      }
 
     } catch (err) {
       console.error("Critical error during cloud data sync:", err);
@@ -213,7 +245,10 @@ const App: React.FC = () => {
   };
 
   const saveReport = async (report: Report) => {
-    setReports(prev => [report, ...prev]);
+    const newReports = [report, ...reports];
+    setReports(newReports);
+    saveToLocal('reports', newReports);
+
     if (supabase) {
       await supabase.from('reports').upsert({
         id: report.id,
@@ -239,7 +274,10 @@ const App: React.FC = () => {
   };
 
   const updateReport = async (id: string, updates: Partial<Report>) => {
-    setReports(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    const newReports = reports.map(r => r.id === id ? { ...r, ...updates } : r);
+    setReports(newReports);
+    saveToLocal('reports', newReports);
+
     if (supabase) {
       const currentReport = reports.find(r => r.id === id);
       if (currentReport) {
@@ -255,9 +293,11 @@ const App: React.FC = () => {
   const addStudent = async (studentData: Omit<Student, 'id' | 'instructorIds'>) => {
     const newId = Math.random().toString(36).substr(2, 9);
     const newStudent = { ...studentData, id: newId, instructorIds: [] };
-    setStudents(prev => [...prev, newStudent]);
+    const newStudents = [...students, newStudent];
+    setStudents(newStudents);
+    saveToLocal('students', newStudents);
+
     if (supabase) {
-      // Fixed: Mapped targetSchool and targetFaculty correctly from studentData
       await supabase.from('students').insert({
         id: newId, name: studentData.name, grade: studentData.grade,
         login_id: studentData.loginId, password: studentData.password,
@@ -267,7 +307,10 @@ const App: React.FC = () => {
   };
 
   const updateStudent = async (id: string, updates: Partial<Student>) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    const newStudents = students.map(s => s.id === id ? { ...s, ...updates } : s);
+    setStudents(newStudents);
+    saveToLocal('students', newStudents);
+
     if (supabase) {
       await supabase.from('students').update({
         name: updates.name, grade: updates.grade, login_id: updates.loginId,
@@ -279,15 +322,19 @@ const App: React.FC = () => {
   };
 
   const deleteStudent = async (id: string) => {
-    setStudents(prev => prev.filter(s => s.id !== id));
+    const newStudents = students.filter(s => s.id !== id);
+    setStudents(newStudents);
+    saveToLocal('students', newStudents);
     if (supabase) await supabase.from('students').delete().eq('id', id);
   };
 
   const addInstructor = async (ins: Omit<Instructor, 'id'>) => {
     const newId = Math.random().toString(36).substr(2, 9);
-    setInstructors(prev => [...prev, { ...ins, id: newId }]);
+    const newInstructors = [...instructors, { ...ins, id: newId }];
+    setInstructors(newInstructors);
+    saveToLocal('instructors', newInstructors);
+
     if (supabase) {
-      // Fixed: Property access on ins changed from login_id to loginId
       await supabase.from('instructors').insert({
         id: newId, name: ins.name, specialty: ins.specialty,
         login_id: ins.loginId, password: ins.password
@@ -296,9 +343,11 @@ const App: React.FC = () => {
   };
 
   const updateInstructor = async (id: string, updates: Partial<Instructor>) => {
-    setInstructors(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+    const newInstructors = instructors.map(i => i.id === id ? { ...i, ...updates } : i);
+    setInstructors(newInstructors);
+    saveToLocal('instructors', newInstructors);
+
     if (supabase) {
-      // Fixed: Property access on updates changed from login_id to loginId
       await supabase.from('instructors').update({
         name: updates.name, specialty: updates.specialty,
         login_id: updates.loginId, password: updates.password
@@ -307,12 +356,15 @@ const App: React.FC = () => {
   };
 
   const deleteInstructor = async (id: string) => {
-    setInstructors(prev => prev.filter(i => i.id !== id));
+    const newInstructors = instructors.filter(i => i.id !== id);
+    setInstructors(newInstructors);
+    saveToLocal('instructors', newInstructors);
     if (supabase) await supabase.from('instructors').delete().eq('id', id);
   };
 
   const updateTimetable = async (newTimetable: TimetableEntry[]) => {
     setTimetable(newTimetable);
+    saveToLocal('timetable', newTimetable);
     if (supabase) {
       for (const entry of newTimetable) {
         await supabase.from('timetable').upsert({
@@ -325,12 +377,26 @@ const App: React.FC = () => {
   };
 
   const saveMockExam = async (exam: MockExam) => {
-    setMockExams(prev => [...prev, exam]);
+    const newExams = [...mockExams, exam];
+    setMockExams(newExams);
+    saveToLocal('mockExams', newExams);
     if (supabase) {
       await supabase.from('mock_exams').insert({
         id: exam.id, student_id: exam.studentId, exam_name: exam.examName,
         exam_date: exam.examDate, scores: exam.scores
       });
+    }
+  };
+
+  const logSession = (session: StudySession) => {
+    const newSessions = [...allSessions, session];
+    setAllSessions(newSessions);
+    saveToLocal('sessions', newSessions);
+    if (supabase) {
+      supabase.from('study_sessions').insert({
+        id: session.id, student_id: session.studentId, date: session.date,
+        subject: session.subject, minutes: session.minutes
+      }).then(({ error }) => { if(error) console.error(error); });
     }
   };
 
@@ -343,7 +409,7 @@ const App: React.FC = () => {
             role={currentUser.role} mockExams={mockExams}
             currentUserStudent={students.find(s => s.id === currentUser.id)}
             currentUserId={currentUser.id} allSessions={allSessions}
-            onLogSession={(s) => setAllSessions(prev => [...prev, s])}
+            onLogSession={logSession}
             timetable={timetable} onUpdateTimetable={updateTimetable}
           />
         );

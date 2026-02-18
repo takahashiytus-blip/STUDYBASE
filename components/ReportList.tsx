@@ -20,13 +20,10 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
   const [editBuffer, setEditBuffer] = useState<Report | null>(null);
   const [newMessage, setNewMessage] = useState('');
 
-  // 閲覧権限に基づいたフィルタリング
   const displayReports = useMemo(() => {
-    // 管理者または講師は全ての報告書を閲覧可能（または上位コンポーネントで絞り込み済み）
     if (currentUser.role === 'admin' || currentUser.role === 'instructor') {
       return reports;
     }
-    // 生徒または保護者は、自身の studentId に紐づく報告書のみ閲覧可能
     return reports.filter(r => r.studentId === currentUser.id);
   }, [reports, currentUser]);
 
@@ -88,14 +85,40 @@ const ReportList: React.FC<ReportListProps> = ({ reports, students, currentUser,
 
   const weeklyTimeline = useMemo(() => {
     if (!selectedReport?.generatedContent.weeklyPlan) return null;
-    const text = selectedReport.generatedContent.weeklyPlan.replace(/\\n/g, '\n');
-    let lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    
+    // AI出力に含まれるエスケープされた改行コードなどをクリーンアップ
+    const planText = selectedReport.generatedContent.weeklyPlan
+      .replace(/\\n/g, '\n')
+      .replace(/\r/g, '');
+    
+    const lines = planText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     
     const steps = Array.from({ length: 7 }, (_, i) => {
-      const dayLabel = `${i + 1}日目`;
-      const foundLine = lines.find(l => l.includes(dayLabel));
-      let content = foundLine ? foundLine.replace(new RegExp(`^.*?${dayLabel}[:：\\s]*`), "").trim() : "復習を継続しましょう。";
-      return { label: dayLabel, content };
+      const dayNum = i + 1;
+      const dayPatterns = [
+        `${dayNum}日目:`, `${dayNum}日目：`, `${dayNum}日目`, 
+        `Day ${dayNum}:`, `Day ${dayNum}：`, `Day${dayNum}`
+      ];
+      
+      let content = "復習を継続しましょう。";
+      
+      for (const pattern of dayPatterns) {
+        const foundLine = lines.find(l => l.startsWith(pattern));
+        if (foundLine) {
+          content = foundLine.substring(pattern.length).trim();
+          if (content.startsWith(':') || content.startsWith('：')) {
+            content = content.substring(1).trim();
+          }
+          break;
+        }
+      }
+      
+      // もしパターンで見つからない場合、配列のインデックスをそのまま使うなどのフォールバック
+      if (content === "復習を継続しましょう。" && lines[i]) {
+          content = lines[i].replace(/^\d+日目[:：\s]*/, "").trim();
+      }
+
+      return { label: `${dayNum}日目`, content };
     });
 
     return (
