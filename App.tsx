@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
@@ -28,13 +29,8 @@ const DEFAULT_ADMIN: AdminConfig = {
   wordKingClassroomHolder: '初代王'
 };
 
-/**
- * タイムゾーンセーフな日付取得 (YYYY-MM-DD)
- * ブラウザの基本設定がUTCであっても、常に日本時間ベースで正確な日付を返す
- */
 export const getLocalISOString = () => {
   const now = new Date();
-  // 日本時間にオフセット調整
   const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -42,19 +38,13 @@ export const getLocalISOString = () => {
   return `${year}-${month}-${day}`;
 };
 
-/**
- * 安全な日付オブジェクトの生成
- * new Date('YYYY-MM-DD') はSafari等でUTCの午前0時と解釈され、表示が1日前になるバグを防ぐ
- */
 export const parseSafeDate = (dateStr: string) => {
   if (!dateStr) return new Date();
   const parts = dateStr.split('-').map(Number);
   if (parts.length !== 3) return new Date();
-  // 第4引数以降を指定しないことでローカル時刻の00:00:00として生成
   return new Date(parts[0], parts[1] - 1, parts[2]);
 };
 
-// ユニークID生成 (タイムスタンプとランダム文字列の組み合わせ)
 export const generateUniqueId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
 const App: React.FC = () => {
@@ -78,7 +68,6 @@ const App: React.FC = () => {
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(DEFAULT_ADMIN);
 
-  // データ保存の信頼性向上
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_reports', JSON.stringify(reports)); }, [reports, isLoading, isAuthenticated]);
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_students', JSON.stringify(students)); }, [students, isLoading, isAuthenticated]);
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_instructors', JSON.stringify(instructors)); }, [instructors, isLoading, isAuthenticated]);
@@ -227,7 +216,6 @@ const App: React.FC = () => {
       const next = { ...prev, ...updates };
       localStorage.setItem('study_base_admin_config', JSON.stringify(next));
       if (isSupabaseConfigured && supabase) {
-        // Fix: Changed next.word_king_record and next.word_king_holder to next.wordKingClassroomRecord and next.wordKingClassroomHolder to match AdminConfig interface
         supabase.from('admin_config').update({
           name: next.name, 
           login_id: next.loginId, 
@@ -278,7 +266,6 @@ const App: React.FC = () => {
         session_year: report.sessionYear, session_month: report.sessionMonth, session_count: report.sessionCount,
         attendance_status: report.attendanceStatus, raw_notes: report.rawNotes, homework_assigned: report.homeworkAssigned,
         homework_completion: report.homeworkCompletion, proposed_self_study_days: report.proposedSelfStudyDays,
-        // Fix: Use camelCase needsAction property correctly from the Report object
         generated_content: report.generatedContent, quiz_score: report.quizScore, messages: report.messages || [], needs_action: report.needsAction || false
       });
     }
@@ -292,6 +279,37 @@ const App: React.FC = () => {
       if (updates.needsAction !== undefined) dbUpdates.needs_action = updates.needsAction;
       if (updates.generatedContent !== undefined) dbUpdates.generated_content = updates.generatedContent;
       if (Object.keys(dbUpdates).length > 0) await supabase.from('reports').update(dbUpdates).eq('id', reportId);
+    }
+  };
+
+  // 報告書内メッセージの共通追加処理
+  const handleAddReportMessage = (reportId: string, text: string) => {
+    const newMessage: ReportMessage = { 
+      id: generateUniqueId('msg'), 
+      senderId: currentUser.id, 
+      senderName: currentUser.name, 
+      senderRole: currentUser.role, 
+      text, 
+      timestamp: new Date().toLocaleTimeString('ja-JP') 
+    };
+    const report = reports.find(rep => rep.id === reportId);
+    if (report) {
+      const updatedMessages = [...(report.messages || []), newMessage];
+      // 生徒・保護者からの送信なら needsAction: true、講師・管理者からならメッセージ追加のみ
+      const shouldNeedAction = currentUser.role === 'student' || currentUser.role === 'parent';
+      handleUpdateReport(reportId, { 
+        messages: updatedMessages, 
+        needsAction: shouldNeedAction ? true : report.needsAction 
+      });
+    }
+  };
+
+  // 報告書内メッセージの共通削除処理
+  const handleDeleteReportMessage = (reportId: string, messageId: string) => {
+    const report = reports.find(rep => rep.id === reportId);
+    if (report) {
+      const updatedMessages = (report.messages || []).filter(m => m.id !== messageId);
+      handleUpdateReport(reportId, { messages: updatedMessages });
     }
   };
 
@@ -340,20 +358,7 @@ const App: React.FC = () => {
       case 'create': 
         return <ReportForm students={students} currentUser={currentUser} onSave={handleSaveReport} />;
       case 'reports': 
-        return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={(rid, txt) => {
-          const nm: ReportMessage = { id: generateUniqueId('msg'), senderId: currentUser.id, senderName: currentUser.name, senderRole: currentUser.role, text: txt, timestamp: new Date().toLocaleTimeString('ja-JP') };
-          const r = reports.find(rep => rep.id === rid);
-          if (r) {
-            const updatedMessages = [...(r.messages || []), nm];
-            handleUpdateReport(rid, { messages: updatedMessages, needsAction: currentUser.role === 'student' || currentUser.role === 'parent' });
-          }
-        }} onDeleteMessage={(rid, mid) => {
-          const r = reports.find(rep => rep.id === rid);
-          if (r) {
-            const updatedMessages = (r.messages || []).filter(m => m.id !== mid);
-            handleUpdateReport(rid, { messages: updatedMessages });
-          }
-        }} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} />;
+        return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} />;
       case 'word-king': 
         return <WordKing classroomBest={adminConfig.wordKingClassroomRecord} classroomHolder={adminConfig.wordKingClassroomHolder} userId={currentUser.id} personalBestFromDB={activeStudent?.wordKingBest || 0} onPersonalBestUpdate={handleUpdateWordKingBest} onNewClassroomRecord={(record, holder) => handleUpdateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder })} />;
       case 'iq-test': 
@@ -361,7 +366,7 @@ const App: React.FC = () => {
       case 'interview': 
         return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
       case 'students': 
-        return <StudentCenter students={students} reports={reports} allSessions={allSessions} currentUser={currentUser} onAddMessage={()=>{}} onDeleteMessage={()=>{}} onMarkResolved={()=>{}} onAddStudent={async (d) => {
+        return <StudentCenter students={students} reports={reports} allSessions={allSessions} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onAddStudent={async (d) => {
           const id = generateUniqueId('s');
           const ns: Student = { ...d, id, instructorIds: [] };
           setStudents(prev => [...prev, ns]);
@@ -407,7 +412,7 @@ const App: React.FC = () => {
           setMockExams(prev => prev.filter(m => m.id !== id));
           if (isSupabaseConfigured && supabase) await supabase.from('mock_exams').delete().eq('id', id);
         }} />;
-      case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={()=>{}} onDeleteMessage={()=>{}} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} />;
+      case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={handleUpdateTimetable} />;
       case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} />;
       default: return <div className="p-10 text-center text-slate-400 font-bold italic">Module not found.</div>;

@@ -16,7 +16,7 @@ interface StudentCenterProps {
   onMarkResolved: (reportId: string) => void;
   onAddStudent?: (student: Omit<Student, 'id' | 'instructorIds'>) => void;
   onUpdateStudent?: (studentId: string, updates: Partial<Student>) => void;
-  onDeleteStudent?: (studentId: string) => void;
+  onDeleteStudent?: (studentId: string, onDeleteComplete?: () => void) => void;
 }
 
 const SUBJECT_CONFIG: Record<string, { color: string; label: string }> = {
@@ -28,7 +28,7 @@ const SUBJECT_CONFIG: Record<string, { color: string; label: string }> = {
   'その他': { color: '#64748b', label: 'その他' },
 };
 
-const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_NAMES_SHORT = ['日', '月', '火', '水', '木', '金', '土'];
 
 const StudentCenter: React.FC<StudentCenterProps> = ({ 
   students, 
@@ -94,6 +94,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
     const dayOfWeek = now.getDay() || 7;
     const monday = new Date(now);
     monday.setDate(now.getDate() - dayOfWeek + 1);
+    monday.setHours(0, 0, 0, 0);
     
     const data = [];
     for (let i = 0; i < 7; i++) {
@@ -104,7 +105,8 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
       const day = String(d.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
       const dayName = DAY_NAMES_SHORT[d.getDay()];
-      const displayLabel = `${d.getMonth() + 1}/${d.getDate()} ${dayName}`;
+      // ラベルをコンパクトに変更: "24(木)" 形式
+      const displayLabel = `${d.getDate()}(${dayName})`;
       
       const entry: any = { dateLabel: displayLabel, date: dateStr };
       Object.keys(SUBJECT_CONFIG).forEach(sub => {
@@ -235,7 +237,13 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
                    <ResponsiveContainer width="100%" height="100%">
                      <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                       <XAxis dataKey="dateLabel" fontSize={9} tickLine={false} axisLine={false} />
+                       <XAxis 
+                         dataKey="dateLabel" 
+                         fontSize={9} 
+                         tickLine={false} 
+                         axisLine={false} 
+                         interval={0} // 全ての日付を表示するように強制
+                       />
                        <YAxis fontSize={9} tickLine={false} axisLine={false} />
                        <Tooltip />
                        <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '9px', fontWeight: 'bold' }} />
@@ -317,7 +325,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
                   currentUser={currentUser} 
                   onAddMessage={onAddMessage} 
                   onDeleteMessage={onDeleteMessage}
-                  onMarkResolved={reportId => onMarkResolved(reportId)} 
+                  onMarkResolved={onMarkResolved} 
                   hideHeader={true} 
                 />
                </div>
@@ -339,7 +347,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
                 <button 
                   onClick={handleUpdateWeeklyMessage}
                   disabled={isUpdatingMessage}
-                  className={`w-full mt-4 py-4 rounded-xl font-black text-sm shadow-lg transition-all active:scale-95 ${isUpdatingMessage ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white hover:bg-rose-600'}`}
+                  className={`w-full mt-4 py-4 rounded-xl font-black text-sm shadow-lg transition-all active:scale-95 ${isUpdatingMessage ? 'bg-emerald-50 text-white' : 'bg-rose-500 text-white hover:bg-rose-600'}`}
                 >
                   {isUpdatingMessage ? '更新完了！ ✓' : 'メッセージを更新する'}
                 </button>
