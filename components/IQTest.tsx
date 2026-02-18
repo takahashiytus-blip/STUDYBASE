@@ -19,8 +19,11 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
   const [scoreData, setScoreData] = useState<any>(null);
 
   const startTest = () => {
-    // 実際にはシャッフルして抽出するが、今回はバンクの全問を使用
-    setCurrentQuestions([...IQ_QUESTION_BANK].sort(() => Math.random() - 0.5));
+    // 200問のバンクからランダムに6問を抽出
+    const shuffled = [...IQ_QUESTION_BANK].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, 6);
+    
+    setCurrentQuestions(selected);
     setCurrentIndex(0);
     setAnswers({});
     setGameState('testing');
@@ -80,7 +83,6 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
       
       setScoreData({ finalScore, radarData });
       setGameState('finished');
-      // 親コンポーネントに保存を依頼
       onComplete(finalScore, percentageBreakdown, analysis || "");
     } catch (error) {
       setAiAnalysis("現在AI分析が利用できません。スコアのみ表示します。");
@@ -97,13 +99,13 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, onComplete }) => {
           <div className="text-8xl">🧠</div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tighter italic">AI 知能・認知特性診断</h2>
           <p className="text-slate-500 font-bold max-w-lg mx-auto leading-relaxed">
-            論理・数値・言語・空間の4項目から、あなたの「学びの特性」を明らかにします。診断結果を元に、AIが最適な学習戦略を提案します。
+            論理・数値・言語・空間の4項目から、あなたの「学びの特性」を明らかにします。200問の問題バンクからランダムに選ばれた6つの難問に挑戦しましょう。
           </p>
         </div>
         <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm max-w-sm mx-auto space-y-6">
           <ul className="text-left text-sm font-bold text-slate-600 space-y-3">
-            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 全 {IQ_QUESTION_BANK.length} 問</li>
-            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 推定所要時間: 約 5 分</li>
+            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 精選された 6 問をランダム出題</li>
+            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 毎回内容が変わる実力診断</li>
             <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 終了後にAI詳細レポートを生成</li>
           </ul>
           <button onClick={startTest} className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95">診断を開始する</button>

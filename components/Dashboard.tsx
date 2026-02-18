@@ -181,7 +181,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [filteredSessions, monday]);
 
   const avgScore = useMemo(() => {
-    // 生徒・保護者の場合は自分自身の平均点、管理者・講師の場合は全体の平均点を計算
     const relevantReports = (role === 'student' || role === 'parent')
       ? reports.filter(r => r.studentId === currentUserId)
       : reports;
@@ -238,7 +237,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 {isEditingCountdown && isStudent ? (
                   <div className="space-y-2 z-10">
-                    <input type="text" value={target1Label} onChange={(e) => setTarget1Label(e.target.value)} className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-1 text-[11px] text-white outline-none focus:bg-white/30" />
+                    <input type="text" value={target1Label} onChange={(e) => setTarget1Label(e.target.value)} className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-1 text-[11px] text-white outline-none focus:bg-white/30" placeholder="目標名" />
                     <input type="date" value={target1DateStr} onChange={(e) => setTarget1DateStr(e.target.value)} className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-1 text-[11px] text-white outline-none focus:bg-white/30" />
                   </div>
                 ) : (
@@ -251,17 +250,25 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 )}
               </div>
+              
               <div className="bg-slate-800 p-6 rounded-[2.5rem] shadow-xl text-white flex flex-col justify-center relative group overflow-hidden border border-white/10 h-[140px]">
                 <div className="flex justify-between items-start mb-2 relative z-10">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Target 2</p>
                 </div>
-                <div className="relative z-10">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-black text-white">{diffDays2 > 0 ? diffDays2 : 0}</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Days</span>
+                {isEditingCountdown && isStudent ? (
+                  <div className="space-y-2 z-10">
+                    <input type="text" value={target2Label} onChange={(e) => setTarget2Label(e.target.value)} className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-1 text-[11px] text-white outline-none focus:bg-white/30" placeholder="目標名" />
+                    <input type="date" value={target2DateStr} onChange={(e) => setTarget2DateStr(e.target.value)} className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-1 text-[11px] text-white outline-none focus:bg-white/30" />
                   </div>
-                  <p className="text-[11px] text-slate-300 font-black truncate mt-1">{target2Label}</p>
-                </div>
+                ) : (
+                  <div className="relative z-10">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-black text-white">{diffDays2 > 0 ? diffDays2 : 0}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Days</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 font-black truncate mt-1">{target2Label}</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -294,7 +301,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                           value={customMins} 
                           onChange={(e) => setCustomMins(e.target.value)}
                           placeholder="分を入力"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-black text-white outline-none focus:border-indigo-500 transition-all" 
+                          className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-3 text-sm font-black text-white outline-none focus:border-indigo-500 transition-all" 
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-500 uppercase">Min</span>
                       </div>
@@ -303,7 +310,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
 
                   <div className="flex items-center gap-4 w-full justify-center">
-                    <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`flex-1 py-4 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 border-2 ${isTimerRunning ? 'bg-rose-500 border-rose-400/50' : 'bg-indigo-50 border-indigo-400/50'}`}>
+                    <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`flex-1 py-4 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 border-2 ${isTimerRunning ? 'bg-rose-500 border-rose-400/50' : 'bg-indigo-600 border-indigo-500 shadow-indigo-900/40'}`}>
                       {isTimerRunning ? <span className="text-xl text-white font-black">PAUSE</span> : <span className="text-xl text-white font-black">START</span>}
                     </button>
                     <button onClick={() => { setTimerSeconds(0); setIsTimerRunning(false); }} className="w-14 py-4 rounded-2xl bg-white/10 flex items-center justify-center text-xs text-slate-400 border border-white/10 font-black">RESET</button>
@@ -349,7 +356,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                           <span className="text-[8px] font-black text-indigo-500 leading-none mb-1 uppercase">{item.startTime}</span>
                           <span className="text-[10px] font-black text-slate-800 leading-tight">{item.subject}</span>
                           
-                          {/* 講師・管理者向けの生徒情報表示 */}
                           {(isAdmin || role === 'instructor') && (
                             <div className="mt-1 flex flex-col gap-0.5 leading-none overflow-hidden border-t border-slate-50 pt-1">
                               <span className="text-[7px] text-slate-500 font-bold truncate w-full">{studentName}</span>
@@ -403,13 +409,13 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex flex-col md:flex-row gap-4 items-end">
                 <div className="flex-1 w-full">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">科目</label>
-                  <select value={logSubject} onChange={(e) => setLogSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold">
+                  <select value={logSubject} onChange={(e) => setLogSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold shadow-sm transition-all">
                     {Object.keys(SUBJECT_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="w-full md:w-32">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">時間(分)</label>
-                  <input type="number" value={logMinutes} onChange={(e) => setLogMinutes(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold text-center" />
+                  <input type="number" value={logMinutes} onChange={(e) => setLogMinutes(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold text-center shadow-sm transition-all" />
                 </div>
                 <button onClick={handleManualLog} className="w-full md:w-auto px-8 py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95">
                   記録を保存
