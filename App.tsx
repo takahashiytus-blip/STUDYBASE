@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
@@ -49,13 +48,11 @@ const App: React.FC = () => {
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
   
-  // 初期設定はlocalStorageを「仮のキャッシュ」としてのみ使用
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(() => {
     const saved = localStorage.getItem('study_base_admin_config');
     return saved ? JSON.parse(saved) : DEFAULT_ADMIN;
   });
 
-  // 全データ同期（クラウドDBから最新を取得）
   const fetchAllData = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
       setReports(MOCK_REPORTS);
@@ -69,7 +66,6 @@ const App: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // 1. Admin Config (クラウドDBの値を最優先)
       const { data: adminData, error: adminError } = await supabase
         .from('admin_config')
         .select('*')
@@ -89,24 +85,20 @@ const App: React.FC = () => {
         setAdminConfig(config);
         localStorage.setItem('study_base_admin_config', JSON.stringify(config));
       } else if (!adminError) {
-        // DBにレコードが全くない場合のみ初期値をセットし、DBにも作成しておく
-        console.info("No admin config in DB. Initializing with defaults.");
         await updateAdminConfig(DEFAULT_ADMIN);
       }
 
-      // 2. Students
       const { data: studentData } = await supabase.from('students').select('*');
       if (studentData) {
         setStudents(studentData.map(s => ({
           id: s.id, name: s.name, grade: s.grade,
           loginId: s.login_id, password: s.password,
-          targetSchool: s.target_school, targetFaculty: s.target_faculty,
+          targetSchool: s.target_school, target_faculty: s.target_faculty,
           weeklyInstructorMessage: s.weekly_instructor_message,
           instructorIds: s.instructor_ids || []
         })));
       }
 
-      // 3. Instructors
       const { data: instructorData } = await supabase.from('instructors').select('*');
       if (instructorData) {
         setInstructors(instructorData.map(i => ({
@@ -115,7 +107,6 @@ const App: React.FC = () => {
         })));
       }
 
-      // 4. Reports
       const { data: reportData } = await supabase.from('reports').select('*').order('date', { ascending: false });
       if (reportData) {
         setReports(reportData.map(r => ({
@@ -129,14 +120,12 @@ const App: React.FC = () => {
         })));
       }
 
-      // 5. Mock Exams
       const { data: mockData } = await supabase.from('mock_exams').select('*');
       if (mockData) setMockExams(mockData.map(m => ({
         id: m.id, studentId: m.student_id, examName: m.exam_name,
         examDate: m.exam_date, scores: m.scores || {}
       })));
 
-      // 6. Timetable
       const { data: timetableData } = await supabase.from('timetable').select('*');
       if (timetableData) {
         setTimetable(timetableData.map(t => ({
@@ -146,7 +135,6 @@ const App: React.FC = () => {
         })));
       }
 
-      // 7. Study Sessions
       const { data: sessionData } = await supabase.from('study_sessions').select('*');
       if (sessionData) setAllSessions(sessionData.map(s => ({
         id: s.id, studentId: s.student_id, date: s.date,
@@ -163,8 +151,6 @@ const App: React.FC = () => {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
-
-  // --- Functions ---
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,15 +192,13 @@ const App: React.FC = () => {
   };
 
   const updateAdminConfig = async (updates: Partial<AdminConfig>) => {
-    // 1. ローカルStateとCacheを即座に更新
     const newConfig = { ...adminConfig, ...updates };
     setAdminConfig(newConfig);
     localStorage.setItem('study_base_admin_config', JSON.stringify(newConfig));
     
-    // 2. クラウドDB（Supabase）を更新。ID:1を明示することで多端末同期を保証
     if (supabase) {
       const { error } = await supabase.from('admin_config').upsert({
-        id: 1, // 常にID:1のレコードを更新
+        id: 1,
         name: newConfig.name,
         login_id: newConfig.loginId,
         password_hash: newConfig.passwordHash,
@@ -223,10 +207,7 @@ const App: React.FC = () => {
         word_king_holder: newConfig.wordKingClassroomHolder,
         updated_at: new Date().toISOString()
       });
-      
-      if (error) {
-        console.error("Failed to save admin config to cloud:", error);
-      }
+      if (error) console.error("Failed to save admin config to cloud:", error);
     }
   };
 
@@ -278,7 +259,7 @@ const App: React.FC = () => {
       await supabase.from('students').insert({
         id: newId, name: studentData.name, grade: studentData.grade,
         login_id: studentData.loginId, password: studentData.password,
-        target_school: studentData.targetSchool, target_faculty: studentData.targetFaculty
+        target_school: studentData.target_school, target_faculty: studentData.target_faculty
       });
     }
   };
@@ -306,7 +287,7 @@ const App: React.FC = () => {
     if (supabase) {
       await supabase.from('instructors').insert({
         id: newId, name: ins.name, specialty: ins.specialty,
-        login_id: ins.loginId, password: ins.password
+        login_id: ins.login_id, password: ins.password
       });
     }
   };
@@ -316,7 +297,7 @@ const App: React.FC = () => {
     if (supabase) {
       await supabase.from('instructors').update({
         name: updates.name, specialty: updates.specialty,
-        login_id: updates.loginId, password: updates.password
+        login_id: updates.login_id, password: updates.password
       }).eq('id', id);
     }
   };
@@ -436,6 +417,7 @@ const App: React.FC = () => {
           <WordKing 
             classroomBest={adminConfig.wordKingClassroomRecord} 
             classroomHolder={adminConfig.wordKingClassroomHolder}
+            userId={currentUser.id}
             onNewClassroomRecord={(record, holder) => updateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder })}
           />
         );
@@ -541,7 +523,7 @@ const App: React.FC = () => {
               </form>
             </div>
           )}
-          <p className="mt-10 text-[9px] text-slate-200 font-bold uppercase tracking-widest">Connected to Cloud DB</p>
+          <p className="mt-10 text-[9px] text-slate-200 font-bold uppercase tracking-widest">STUDY BASE ver.2.0.0</p>
         </div>
       </div>
     );

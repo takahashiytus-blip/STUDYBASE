@@ -6,6 +6,7 @@ import { WORD_BANK, Question } from '../constants/wordData';
 interface WordKingProps {
   classroomBest: number;
   classroomHolder: string;
+  userId: string;
   onNewClassroomRecord: (newScore: number, holderName: string) => void;
 }
 
@@ -19,15 +20,15 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 };
 
 const TIME_LIMIT = 5.0; 
-const DAILY_LIMIT = 10; 
+const DAILY_LIMIT = 10; // 1日10回に設定
 
-const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, onNewClassroomRecord }) => {
+const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, userId, onNewClassroomRecord }) => {
   const [gameState, setGameState] = useState<'idle' | 'playing' | 'gameover' | 'new-record'>('idle');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [displayChoices, setDisplayChoices] = useState<string[]>([]);
   const [streak, setStreak] = useState(0);
-  const [highScore, setHighScore] = useState(Number(localStorage.getItem('wordKingHighScore') || 0));
+  const [highScore, setHighScore] = useState(Number(localStorage.getItem(`wordKingHighScore_${userId}`) || 0));
   const [timeLeft, setTimeLeft] = useState(TIME_LIMIT);
   const [isWrong, setIsWrong] = useState(false);
   const [dailyCount, setDailyCount] = useState(0);
@@ -39,21 +40,27 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, onN
 
   const timerRef = useRef<number | null>(null);
 
+  // ユーザーIDに紐づくキーを使用して、個別のカウントを管理
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
-    const lastDate = localStorage.getItem('wordKing_lastDate');
-    const savedCount = Number(localStorage.getItem('wordKing_dailyCount') || 0);
+    const lastDateKey = `wordKing_lastDate_${userId}`;
+    const countKey = `wordKing_dailyCount_${userId}`;
+    
+    const lastDate = localStorage.getItem(lastDateKey);
+    const savedCount = Number(localStorage.getItem(countKey) || 0);
 
     if (lastDate !== today) {
-      localStorage.setItem('wordKing_lastDate', today);
-      localStorage.setItem('wordKing_dailyCount', '0');
+      localStorage.setItem(lastDateKey, today);
+      localStorage.setItem(countKey, '0');
       setDailyCount(0);
     } else {
       setDailyCount(savedCount);
     }
-  }, []);
+    
+    // 自身のハイスコアもリロード
+    setHighScore(Number(localStorage.getItem(`wordKingHighScore_${userId}`) || 0));
+  }, [userId]);
 
-  // 重要：問題が変わるたびに選択肢をシャッフル
   useEffect(() => {
     if (gameState === 'playing' && questions[currentIndex]) {
       setDisplayChoices(shuffleArray(questions[currentIndex].choices));
@@ -68,7 +75,7 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, onN
     
     const nextCount = dailyCount + 1;
     setDailyCount(nextCount);
-    localStorage.setItem('wordKing_dailyCount', nextCount.toString());
+    localStorage.setItem(`wordKing_dailyCount_${userId}`, nextCount.toString());
 
     setStreak(0);
     setCurrentIndex(0);
@@ -83,7 +90,7 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, onN
     
     if (streak > highScore) {
       setHighScore(streak);
-      localStorage.setItem('wordKingHighScore', streak.toString());
+      localStorage.setItem(`wordKingHighScore_${userId}`, streak.toString());
     }
 
     if (streak > classroomBest) {
@@ -91,7 +98,7 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, onN
     } else {
       setGameState('gameover');
     }
-  }, [streak, highScore, classroomBest]);
+  }, [streak, highScore, classroomBest, userId]);
 
   useEffect(() => {
     if (gameState === 'playing') {
@@ -176,12 +183,17 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, onN
             <div className="space-y-2">
               <p className="text-slate-500 font-bold max-w-md mx-auto leading-relaxed">
                 制限時間は1問につき <span className="text-indigo-600 font-black">5秒</span>。<br/>
-                本日の残り挑戦回数: <span className={isLimitReached ? 'text-rose-500' : 'text-slate-800'}>{DAILY_LIMIT - dailyCount}</span> / {DAILY_LIMIT}
+                本日の残り挑戦権: <span className={isLimitReached ? 'text-rose-500' : 'text-slate-800'}>{DAILY_LIMIT - dailyCount}</span> / {DAILY_LIMIT}
               </p>
+              {isLimitReached && (
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                  明日また挑戦しましょう！
+                </p>
+              )}
             </div>
             {isLimitReached ? (
               <div className="p-8 bg-rose-50 border border-rose-100 rounded-[2rem] max-w-sm mx-auto">
-                <p className="text-rose-500 font-black">本日の挑戦上限に達しました。</p>
+                <p className="text-rose-500 font-black">本日の挑戦は終了しました。</p>
               </div>
             ) : (
               <button onClick={startGame} className="px-16 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-xl hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95">挑戦を開始する</button>
@@ -243,7 +255,8 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, onN
                  <p className="text-5xl font-black text-indigo-600">{highScore}</p>
                </div>
             </div>
-            <button onClick={startGame} disabled={isLimitReached} className={`px-16 py-5 rounded-[2rem] font-black text-xl shadow-xl transition-all ${isLimitReached ? 'bg-slate-100 text-slate-300' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>再挑戦</button>
+            <p className="text-sm font-bold text-slate-400 italic">本日の挑戦はこれで終了です。また明日！</p>
+            <button onClick={() => setGameState('idle')} className="px-12 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black">メニューに戻る</button>
           </div>
         </div>
       )}
