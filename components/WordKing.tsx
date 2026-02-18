@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { validateDisplayName } from '../services/geminiService';
 import { WORD_BANK, Question } from '../constants/wordData';
@@ -141,15 +140,23 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
   const handleRecordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHolderName.trim()) return;
+    
     setIsValidatingName(true);
-    const result = await validateDisplayName(newHolderName);
-    if (result.isValid) {
-      onNewClassroomRecord(streak, newHolderName);
-      setGameState('gameover');
-    } else {
-      setValidationError(result.reason || "不適切な名前です。");
+    setValidationError('');
+    
+    try {
+      const result = await validateDisplayName(newHolderName);
+      if (result.isValid) {
+        onNewClassroomRecord(streak, newHolderName);
+        setGameState('gameover');
+      } else {
+        setValidationError(result.reason || "不適切な名前です。");
+      }
+    } catch (err) {
+      setValidationError("接続エラーが発生しました。");
+    } finally {
+      setIsValidatingName(false);
     }
-    setIsValidatingName(false);
   };
 
   const timerColor = timeLeft > 2.5 ? 'bg-emerald-400' : timeLeft > 1.2 ? 'bg-amber-400' : 'bg-rose-500';
@@ -255,8 +262,29 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
                  <p className="text-5xl font-black text-indigo-600">{highScore}</p>
                </div>
             </div>
-            <p className="text-sm font-bold text-slate-400 italic">本日の挑戦はこれで終了です。また明日！</p>
-            <button onClick={() => setGameState('idle')} className="px-12 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black">メニューに戻る</button>
+            
+            <div className="space-y-4">
+              <p className="text-sm font-bold text-slate-400 italic">
+                {isLimitReached ? "本日の挑戦はこれで終了です。また明日！" : `本日の残り挑戦回数: ${DAILY_LIMIT - dailyCount}回`}
+              </p>
+              
+              <div className="flex gap-4 justify-center">
+                {!isLimitReached && (
+                  <button 
+                    onClick={startGame} 
+                    className="px-12 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95"
+                  >
+                    もう一度挑戦する
+                  </button>
+                )}
+                <button 
+                  onClick={() => setGameState('idle')} 
+                  className={`px-12 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black transition-all ${!isLimitReached ? 'opacity-50 hover:opacity-100' : ''}`}
+                >
+                  メニューに戻る
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -270,8 +298,29 @@ const WordKing: React.FC<WordKingProps> = ({ classroomBest, classroomHolder, use
                <p className="text-[10px] font-black uppercase text-slate-400 mb-2">SCORE</p>
                <p className="text-7xl font-black mb-8 text-slate-900">{streak}</p>
                <form onSubmit={handleRecordSubmit} className="space-y-4">
-                 <input type="text" required autoFocus maxLength={12} value={newHolderName} onChange={(e) => setNewHolderName(e.target.value)} className="w-full px-6 py-4 rounded-xl border-2 border-slate-100 focus:border-indigo-500 outline-none text-xl font-black text-center" placeholder="名前を入力" />
-                 <button disabled={isValidatingName} className="w-full py-4 bg-indigo-900 text-white rounded-xl font-black text-lg">記録を保存</button>
+                 <input 
+                  type="text" 
+                  required 
+                  autoFocus 
+                  disabled={isValidatingName}
+                  maxLength={12} 
+                  value={newHolderName} 
+                  onChange={(e) => setNewHolderName(e.target.value)} 
+                  className="w-full px-6 py-4 rounded-xl border-2 border-slate-100 focus:border-indigo-500 outline-none text-xl font-black text-center disabled:opacity-50" 
+                  placeholder="名前を入力" 
+                 />
+                 {validationError && <p className="text-[10px] text-rose-500 font-bold">{validationError}</p>}
+                 <button 
+                  disabled={isValidatingName} 
+                  className={`w-full py-4 rounded-xl font-black text-lg shadow-xl transition-all flex items-center justify-center gap-3 ${isValidatingName ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-indigo-900 text-white hover:bg-black active:scale-95'}`}
+                 >
+                   {isValidatingName ? (
+                     <>
+                       <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                       名前をチェック中...
+                     </>
+                   ) : '記録を保存'}
+                 </button>
                </form>
             </div>
           </div>

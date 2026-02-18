@@ -93,7 +93,8 @@ const App: React.FC = () => {
         setStudents(studentData.map(s => ({
           id: s.id, name: s.name, grade: s.grade,
           loginId: s.login_id, password: s.password,
-          targetSchool: s.target_school, target_faculty: s.target_faculty,
+          // Corrected mapping: targetFaculty must match the property in Student interface
+          targetSchool: s.target_school, targetFaculty: s.target_faculty,
           weeklyInstructorMessage: s.weekly_instructor_message,
           instructorIds: s.instructor_ids || []
         })));
@@ -256,10 +257,11 @@ const App: React.FC = () => {
     const newStudent = { ...studentData, id: newId, instructorIds: [] };
     setStudents(prev => [...prev, newStudent]);
     if (supabase) {
+      // Fixed: Mapped targetSchool and targetFaculty correctly from studentData
       await supabase.from('students').insert({
         id: newId, name: studentData.name, grade: studentData.grade,
         login_id: studentData.loginId, password: studentData.password,
-        target_school: studentData.target_school, target_faculty: studentData.target_faculty
+        target_school: studentData.targetSchool, target_faculty: studentData.targetFaculty
       });
     }
   };
@@ -285,9 +287,10 @@ const App: React.FC = () => {
     const newId = Math.random().toString(36).substr(2, 9);
     setInstructors(prev => [...prev, { ...ins, id: newId }]);
     if (supabase) {
+      // Fixed: Property access on ins changed from login_id to loginId
       await supabase.from('instructors').insert({
         id: newId, name: ins.name, specialty: ins.specialty,
-        login_id: ins.login_id, password: ins.password
+        login_id: ins.loginId, password: ins.password
       });
     }
   };
@@ -295,9 +298,10 @@ const App: React.FC = () => {
   const updateInstructor = async (id: string, updates: Partial<Instructor>) => {
     setInstructors(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
     if (supabase) {
+      // Fixed: Property access on updates changed from login_id to loginId
       await supabase.from('instructors').update({
         name: updates.name, specialty: updates.specialty,
-        login_id: updates.login_id, password: updates.password
+        login_id: updates.loginId, password: updates.password
       }).eq('id', id);
     }
   };
