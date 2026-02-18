@@ -303,7 +303,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
 
                   <div className="flex items-center gap-4 w-full justify-center">
-                    <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`flex-1 py-4 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 border-2 ${isTimerRunning ? 'bg-rose-500 border-rose-400/50' : 'bg-indigo-500 border-indigo-400/50'}`}>
+                    <button onClick={() => setIsTimerRunning(!isTimerRunning)} className={`flex-1 py-4 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 border-2 ${isTimerRunning ? 'bg-rose-500 border-rose-400/50' : 'bg-indigo-50 border-indigo-400/50'}`}>
                       {isTimerRunning ? <span className="text-xl text-white font-black">PAUSE</span> : <span className="text-xl text-white font-black">START</span>}
                     </button>
                     <button onClick={() => { setTimerSeconds(0); setIsTimerRunning(false); }} className="w-14 py-4 rounded-2xl bg-white/10 flex items-center justify-center text-xs text-slate-400 border border-white/10 font-black">RESET</button>
@@ -340,16 +340,23 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div className="h-full flex items-center justify-center opacity-20"><span className="text-[10px] font-bold">---</span></div>
                   ) : (
                     dayItems.map(item => {
-                      const studentName = students.find(s => s.id === item.studentId)?.name || '';
+                      const student = students.find(s => s.id === item.studentId);
+                      const studentName = student?.name || '';
+                      const studentGrade = student?.grade || '';
                       const instructorName = instructors.find(i => i.id === item.instructorId)?.name || '';
                       return (
                         <div key={item.id} className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
                           <span className="text-[8px] font-black text-indigo-500 leading-none mb-1 uppercase">{item.startTime}</span>
                           <span className="text-[10px] font-black text-slate-800 leading-tight">{item.subject}</span>
-                          {isAdmin && (
-                            <div className="mt-1 flex flex-col gap-0.5 leading-none overflow-hidden">
-                              <span className="text-[7px] text-slate-400 font-bold truncate w-full">{studentName}</span>
-                              <span className="text-[7px] text-indigo-300 font-bold truncate w-full">{instructorName}</span>
+                          
+                          {/* 講師・管理者向けの生徒情報表示 */}
+                          {(isAdmin || role === 'instructor') && (
+                            <div className="mt-1 flex flex-col gap-0.5 leading-none overflow-hidden border-t border-slate-50 pt-1">
+                              <span className="text-[7px] text-slate-500 font-bold truncate w-full">{studentName}</span>
+                              <span className="text-[6px] text-slate-400 font-medium truncate w-full">{studentGrade}</span>
+                              {isAdmin && (
+                                <span className="text-[6px] text-indigo-300 font-bold truncate w-full mt-0.5">{instructorName}</span>
+                              )}
                             </div>
                           )}
                         </div>

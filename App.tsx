@@ -312,22 +312,23 @@ const App: React.FC = () => {
   
   if (!isAuthenticated) return (
     <div className="h-screen flex items-center justify-center p-6 bg-slate-50">
-      <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-sm w-full border border-slate-100">
+      <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-sm w-full border border-slate-100 flex flex-col items-center">
         <h1 className="text-4xl font-black italic mb-8">STUDY <span className="text-indigo-600">BASE</span></h1>
         {authStep === 'role-selection' ? (
-          <div className="space-y-4">
+          <div className="space-y-4 w-full">
             <button onClick={() => { setLoginRole('student'); setAuthStep('credentials'); }} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black shadow-xl hover:bg-indigo-700 transition-all">生徒・保護者</button>
             <button onClick={() => { setLoginRole('instructor'); setAuthStep('credentials'); }} className="w-full py-6 bg-slate-800 text-white rounded-[2rem] font-black shadow-xl hover:bg-slate-900 transition-all">講師</button>
             <button onClick={() => { setLoginRole('admin'); setAuthStep('credentials'); }} className="text-xs text-slate-300 font-bold uppercase mt-8 block mx-auto hover:text-indigo-400 transition-colors">Admin Access</button>
           </div>
         ) : (
-          <form onSubmit={handleLogin} className="space-y-4 animate-fadeIn">
+          <form onSubmit={handleLogin} className="space-y-4 animate-fadeIn w-full">
             <input type="text" value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="ログインID" className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-indigo-500 transition-all" />
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="パスワード" className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none focus:border-indigo-500 transition-all" />
             <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-indigo-700 transition-all">ログイン</button>
-            <button type="button" onClick={() => setAuthStep('role-selection')} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">役割選択に戻る</button>
+            <button type="button" onClick={() => setAuthStep('role-selection')} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 2.1.9</p>
       </div>
     </div>
   );
