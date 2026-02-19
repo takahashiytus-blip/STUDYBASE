@@ -71,8 +71,9 @@ export interface Report {
     lessonSummary: string;
     studentPerformance: string;
     homeworkStatus: string;
+    homeworkList: string[]; // 追加: 宿題の箇条書きリスト
     nextSteps: string;
-    weeklyPlan: string;
+    weeklyPlan: { day: string; task: string }[]; // 変更: 構造化データ
     messageToParents: string;
   };
   quizScore?: number;

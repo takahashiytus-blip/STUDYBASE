@@ -55,6 +55,7 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ reports, students, curren
               onAddMessage={onAddMessage}
               onDeleteMessage={onDeleteMessage}
               onMarkResolved={onMarkResolved}
+              showFilters={false} // リクエスト画面ではフィルタを非表示にし全件表示する
             />
           </div>
 

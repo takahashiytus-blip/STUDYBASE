@@ -48,6 +48,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
   const [weeklyMessage, setWeeklyMessage] = useState('');
   const [isUpdatingMessage, setIsUpdatingMessage] = useState(false);
   const [viewingIQResult, setViewingIQResult] = useState<IQResult | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
 
   const [formData, setFormData] = useState({ 
     name: '', 
@@ -67,21 +68,47 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
   const selectedStudent = students.find(s => s.id === selectedStudentId);
   const studentReports = reports.filter(r => r.studentId === selectedStudentId);
 
-  const getWeeklyHoursForStudent = (studentId: string) => {
+  // 選択された週の範囲計算
+  const { monday, sunday } = useMemo(() => {
     const now = new Date();
     const dayOfWeek = now.getDay() || 7;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - dayOfWeek + 1);
-    monday.setHours(0, 0, 0, 0);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
+    const m = new Date(now);
+    m.setDate(now.getDate() - dayOfWeek + 1 + (weekOffset * 7));
+    m.setHours(0, 0, 0, 0);
+    const s = new Date(m);
+    s.setDate(m.getDate() + 6);
+    s.setHours(23, 59, 59, 999);
+    return { monday: m, sunday: s };
+  }, [weekOffset]);
 
+  const currentViewWeeklyTotal = useMemo(() => {
+    if (!selectedStudentId) return "0.0";
     const mins = allSessions
       .filter(s => {
-        if (s.studentId !== studentId) return false;
+        if (s.studentId !== selectedStudentId) return false;
         const d = parseSafeDate(s.date);
         return d >= monday && d <= sunday;
+      })
+      .reduce((acc, curr) => acc + curr.minutes, 0);
+    return (mins / 60).toFixed(1);
+  }, [selectedStudentId, allSessions, monday, sunday]);
+
+  const getWeeklyHoursForStudent = (studentId: string) => {
+    // リスト表示用：常に「今週」の時間を返す
+    const now = new Date();
+    const dayOfWeek = now.getDay() || 7;
+    const m = new Date(now);
+    m.setDate(now.getDate() - dayOfWeek + 1);
+    m.setHours(0, 0, 0, 0);
+    const s = new Date(m);
+    s.setDate(m.getDate() + 6);
+    s.setHours(23, 59, 59, 999);
+
+    const mins = allSessions
+      .filter(sess => {
+        if (sess.studentId !== studentId) return false;
+        const d = parseSafeDate(sess.date);
+        return d >= m && d <= s;
       })
       .reduce((acc, curr) => acc + curr.minutes, 0);
     
@@ -90,12 +117,6 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
 
   const chartData = useMemo(() => {
     if (!selectedStudentId) return [];
-    const now = new Date();
-    const dayOfWeek = now.getDay() || 7;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - dayOfWeek + 1);
-    monday.setHours(0, 0, 0, 0);
-    
     const data = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
@@ -105,7 +126,6 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
       const day = String(d.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
       const dayName = DAY_NAMES_SHORT[d.getDay()];
-      // ラベルをコンパクトに変更: "24(木)" 形式
       const displayLabel = `${d.getDate()}(${dayName})`;
       
       const entry: any = { dateLabel: displayLabel, date: dateStr };
@@ -118,7 +138,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
       data.push(entry);
     }
     return data;
-  }, [selectedStudentId, allSessions]);
+  }, [selectedStudentId, allSessions, monday]);
 
   const handleUpdateWeeklyMessage = () => {
     if (!selectedStudentId || !onUpdateStudent) return;
@@ -191,7 +211,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
                         <button onClick={() => handleDelete(student.id, student.name)} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-colors shadow-sm">🗑</button>
                       </div>
                     )}
-                    <div onClick={() => { setSelectedStudentId(student.id); setWeeklyMessage(student.weeklyInstructorMessage || ''); }} className="cursor-pointer">
+                    <div onClick={() => { setSelectedStudentId(student.id); setWeeklyMessage(student.weeklyInstructorMessage || ''); setWeekOffset(0); }} className="cursor-pointer">
                       <div className="flex justify-between items-start mb-4">
                         <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl font-black group-hover:bg-indigo-600 group-hover:text-white transition-colors">{student.name[0]}</div>
                         <div className="flex flex-col items-end gap-2">
@@ -229,20 +249,51 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
                <div className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm border border-slate-100">
-                 <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                   <span className="w-5 h-5 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px]">📊</span>
-                   週間学習推移
-                 </h4>
+                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                   <div>
+                     <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                       <span className="w-5 h-5 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px]">📊</span>
+                       週間学習推移
+                     </h4>
+                     <div className="mt-2 flex items-center gap-2">
+                       <span className="text-xl font-black text-indigo-600">{currentViewWeeklyTotal}h</span>
+                       <p className="text-[10px] font-bold text-slate-400 uppercase">{monday.toLocaleDateString('ja-JP')} 〜 {sunday.toLocaleDateString('ja-JP')}</p>
+                     </div>
+                   </div>
+                   <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                    <button 
+                      onClick={() => setWeekOffset(prev => prev - 1)}
+                      className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-400 hover:text-indigo-600 transition-all font-black border border-slate-100"
+                      title="先週"
+                    >
+                      ←
+                    </button>
+                    <button 
+                      onClick={() => setWeekOffset(0)}
+                      className={`px-4 py-2 text-[10px] font-black uppercase transition-all rounded-xl ${weekOffset === 0 ? 'text-slate-300 pointer-events-none' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                    >
+                      今週
+                    </button>
+                    <button 
+                      onClick={() => setWeekOffset(prev => prev + 1)}
+                      className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-400 hover:text-indigo-600 transition-all font-black border border-slate-100"
+                      title="翌週"
+                    >
+                      →
+                    </button>
+                  </div>
+                 </div>
                  <div className="h-64">
                    <ResponsiveContainer width="100%" height="100%">
                      <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                        <XAxis 
                          dataKey="dateLabel" 
-                         fontSize={9} 
+                         fontSize={8} 
                          tickLine={false} 
                          axisLine={false} 
-                         interval={0} // 全ての日付を表示するように強制
+                         interval={0}
+                         minTickGap={0}
                        />
                        <YAxis fontSize={9} tickLine={false} axisLine={false} />
                        <Tooltip />

@@ -40,14 +40,30 @@ export const generateProfessionalReport = async (
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            lessonSummary: { type: Type.STRING },
-            studentPerformance: { type: Type.STRING },
-            homeworkStatus: { type: Type.STRING },
-            nextSteps: { type: Type.STRING },
-            weeklyPlan: { type: Type.STRING },
-            messageToParents: { type: Type.STRING }
+            lessonSummary: { type: Type.STRING, description: "本日の授業内容の要約" },
+            studentPerformance: { type: Type.STRING, description: "生徒の理解度や態度の評価" },
+            homeworkStatus: { type: Type.STRING, description: "前回の宿題の取り組み状況" },
+            homeworkList: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING },
+              description: "今回出した宿題を箇条書きのリスト形式にしたもの"
+            },
+            nextSteps: { type: Type.STRING, description: "次回への課題やアドバイス" },
+            weeklyPlan: { 
+              type: Type.ARRAY, 
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  day: { type: Type.STRING, description: "1日目〜7日目" },
+                  task: { type: Type.STRING, description: "その日にやるべき具体的な学習内容" }
+                },
+                required: ["day", "task"]
+              },
+              description: "宿題を7日間に分散させた日割り学習計画"
+            },
+            messageToParents: { type: Type.STRING, description: "保護者への一言メッセージ" }
           },
-          required: ["lessonSummary", "studentPerformance", "homeworkStatus", "nextSteps", "weeklyPlan", "messageToParents"]
+          required: ["lessonSummary", "studentPerformance", "homeworkStatus", "homeworkList", "nextSteps", "weeklyPlan", "messageToParents"]
         }
       }
     });
@@ -57,7 +73,6 @@ export const generateProfessionalReport = async (
 
 /**
  * 知能診断の結果から認知特性と学習アドバイスを生成
- * 高効率な gemini-3-flash-preview を使用し、利用制限リスクを最小化
  */
 export const generateIQAnalysis = async (
   studentName: string,
@@ -129,7 +144,6 @@ export const generateInterviewMaterial = async (
             requiredStudyHours: { 
               type: Type.OBJECT, 
               properties: { 
-                // Fix: Corrected type from invalid Number(Type.INTEGER) to Type.INTEGER
                 totalWeekly: { type: Type.INTEGER }, 
                 subjectBreakdown: { 
                   type: Type.ARRAY, 
@@ -137,7 +151,6 @@ export const generateInterviewMaterial = async (
                     type: Type.OBJECT, 
                     properties: { 
                       subject: { type: Type.STRING }, 
-                      // Fix: Corrected type from invalid Number(Type.INTEGER) to Type.INTEGER
                       hours: { type: Type.INTEGER }, 
                       priorityReason: { type: Type.STRING } 
                     } 

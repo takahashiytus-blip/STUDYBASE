@@ -65,8 +65,19 @@ export const MOCK_REPORTS: Report[] = [
       lessonSummary: '本日は連立方程式の応用（文章題）を中心に取り組みました。',
       studentPerformance: '序盤は変数の置き方に迷いが見られましたが、代入法の活用方法を解説したところ、中盤以降は自力で正答を導き出せるようになりました。非常に高い集中力でした。',
       homeworkStatus: '前回提示した宿題は完璧にこなされており、基礎固めがしっかりできていることが確認できました。',
+      // Added missing homeworkList field to match types.ts
+      homeworkList: ['問題集 p.40-42'],
       nextSteps: '次回は一次関数の導入に入ります。今回の連立方程式の知識が必要になるため、復習を継続してください。',
-      weeklyPlan: '1日目：p.40 解き直し\n2日目：p.41 練習問題\n3日目：p.42 応用問題\n4日目：間違えた箇所の復習\n5日目：確認問題 A\n6日目：確認問題 B\n7日目：次回の予習',
+      // Fixed: converted string to structured weeklyPlan array as required by types.ts
+      weeklyPlan: [
+        { day: '1日目', task: 'p.40 解き直し' },
+        { day: '2日目', task: 'p.41 練習問題' },
+        { day: '3日目', task: 'p.42 応用問題' },
+        { day: '4日目', task: '間違えた箇所の復習' },
+        { day: '5日目', task: '確認問題 A' },
+        { day: '6日目', task: '確認問題 B' },
+        { day: '7日目', task: '次回の予習' }
+      ],
       messageToParents: '着実にステップアップされています。ご家庭でも、代入法ができるようになったことをぜひ褒めてあげてください。'
     },
     messages: []

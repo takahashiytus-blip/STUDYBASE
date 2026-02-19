@@ -153,6 +153,7 @@ const App: React.FC = () => {
         generatedContent: r.generated_content || r.generatedContent, 
         quizScore: r.quiz_score || r.quizScore, 
         messages: r.messages || [], 
+        // Fix: Changed property name to 'needsAction' to match Report interface
         needsAction: r.needs_action || r.needsAction
       })));
 
@@ -197,15 +198,32 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginRole === 'admin' && loginId === adminConfig.loginId && password === adminConfig.passwordHash) {
-      setCurrentUser({ role: 'admin', id: 'admin', name: adminConfig.name });
-      setIsAuthenticated(true);
+
+    // 役割に基づいた厳格な認証チェック
+    if (loginRole === 'admin') {
+      if (loginId === adminConfig.loginId && password === adminConfig.passwordHash) {
+        setCurrentUser({ role: 'admin', id: 'admin', name: adminConfig.name });
+        setIsAuthenticated(true);
+        return;
+      }
+      alert('管理者ログイン情報が正しくありません。');
     } else if (loginRole === 'instructor') {
       const ins = instructors.find(i => i.loginId === loginId && i.password === password);
-      if (ins) { setCurrentUser({ role: 'instructor', id: ins.id, name: ins.name }); setIsAuthenticated(true); }
+      if (ins) {
+        setCurrentUser({ role: 'instructor', id: ins.id, name: ins.name });
+        setIsAuthenticated(true);
+        return;
+      }
+      alert('講師ログイン情報が正しくありません。');
     } else {
+      // 生徒・保護者ログイン（loginRole は 'student' または 'parent'）
       const std = students.find(s => s.loginId === loginId && s.password === password);
-      if (std) { setCurrentUser({ role: loginRole, id: std.id, name: std.name }); setIsAuthenticated(true); }
+      if (std) {
+        setCurrentUser({ role: loginRole, id: std.id, name: std.name });
+        setIsAuthenticated(true);
+        return;
+      }
+      alert('生徒・保護者ログイン情報が正しくありません。');
     }
   };
 
@@ -266,6 +284,7 @@ const App: React.FC = () => {
         session_year: report.sessionYear, session_month: report.sessionMonth, session_count: report.sessionCount,
         attendance_status: report.attendanceStatus, raw_notes: report.rawNotes, homework_assigned: report.homeworkAssigned,
         homework_completion: report.homeworkCompletion, proposed_self_study_days: report.proposedSelfStudyDays,
+        // Fix: Property 'needs_action' expects report.needsAction (camelCase) from Report type.
         generated_content: report.generatedContent, quiz_score: report.quizScore, messages: report.messages || [], needs_action: report.needsAction || false
       });
     }
@@ -282,7 +301,6 @@ const App: React.FC = () => {
     }
   };
 
-  // 報告書内メッセージの共通追加処理
   const handleAddReportMessage = (reportId: string, text: string) => {
     const newMessage: ReportMessage = { 
       id: generateUniqueId('msg'), 
@@ -295,7 +313,6 @@ const App: React.FC = () => {
     const report = reports.find(rep => rep.id === reportId);
     if (report) {
       const updatedMessages = [...(report.messages || []), newMessage];
-      // 生徒・保護者からの送信なら needsAction: true、講師・管理者からならメッセージ追加のみ
       const shouldNeedAction = currentUser.role === 'student' || currentUser.role === 'parent';
       handleUpdateReport(reportId, { 
         messages: updatedMessages, 
@@ -304,7 +321,6 @@ const App: React.FC = () => {
     }
   };
 
-  // 報告書内メッセージの共通削除処理
   const handleDeleteReportMessage = (reportId: string, messageId: string) => {
     const report = reports.find(rep => rep.id === reportId);
     if (report) {

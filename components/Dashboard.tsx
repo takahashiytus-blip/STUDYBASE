@@ -74,6 +74,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [target2DateStr, setTarget2DateStr] = useState(currentUserStudent?.targets?.date2 || '2024-11-20');
   const [isEditingCountdown, setIsEditingCountdown] = useState(false);
 
+  // 週のオフセット管理
+  const [weekOffset, setWeekOffset] = useState(0);
+
   useEffect(() => {
     if (currentUserStudent?.targets) {
       setTarget1Label(currentUserStudent.targets.label1);
@@ -97,8 +100,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     setIsEditingCountdown(false);
   };
 
-  const [weekOffset, setWeekOffset] = useState(0);
-
   const { monday, sunday } = useMemo(() => {
     const now = new Date();
     const dayOfWeek = now.getDay() || 7; 
@@ -110,6 +111,44 @@ const Dashboard: React.FC<DashboardProps> = ({
     s.setHours(23, 59, 59, 999);
     return { monday: m, sunday: s };
   }, [weekOffset]);
+
+  // 選択された週の「全生徒」の学習時間を集計してランキング作成
+  const rankingData = useMemo(() => {
+    const stats: Record<string, number> = {};
+    // まず全生徒を0で初期化
+    students.forEach(s => stats[s.id] = 0);
+    
+    // セッションを集計
+    allSessions.forEach(s => {
+      const d = parseSafeDate(s.date);
+      if (d >= monday && d <= sunday) {
+        stats[s.studentId] = (stats[s.studentId] || 0) + s.minutes;
+      }
+    });
+
+    return Object.entries(stats)
+      .map(([id, minutes]) => ({ id, minutes }))
+      .sort((a, b) => b.minutes - a.minutes);
+  }, [allSessions, students, monday, sunday]);
+
+  const topStats = useMemo(() => {
+    const top = rankingData[0];
+    return {
+      minutes: top?.minutes || 0,
+      hours: ((top?.minutes || 0) / 60).toFixed(1)
+    };
+  }, [rankingData]);
+
+  const myStats = useMemo(() => {
+    const sid = currentUserStudent?.id || currentUserId;
+    const minutes = rankingData.find(r => r.id === sid)?.minutes || 0;
+    const rank = rankingData.findIndex(r => r.id === sid) + 1;
+    return {
+      minutes,
+      hours: (minutes / 60).toFixed(1),
+      rank
+    };
+  }, [rankingData, currentUserStudent, currentUserId]);
 
   const filteredSessions = useMemo(() => {
     const sid = currentUserStudent?.id || currentUserId;
@@ -222,11 +261,21 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className={`grid grid-cols-1 ${role === 'parent' ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-5 md:gap-6`}>
         {!isPrivileged ? (
           <>
-            <div className="bg-white p-7 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col justify-center">
-              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-3">Your Quiz Average</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-slate-800">{avgScore}</span>
-                <span className="text-lg font-bold text-slate-400">pt</span>
+            <div className="bg-white p-7 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col justify-center relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-12 -mt-12 group-hover:scale-110 transition-transform"></div>
+              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-3 relative z-10">Class Ranking</p>
+              <div className="flex items-baseline gap-2 relative z-10">
+                <span className="text-[10px] font-black text-slate-400">第</span>
+                <span className="text-5xl font-black text-slate-800">{myStats.rank}</span>
+                <span className="text-lg font-bold text-slate-400">位</span>
+              </div>
+              <div className="mt-4 flex items-center gap-2 relative z-10">
+                <span className="text-[9px] font-black bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full uppercase">👑 Top: {topStats.hours}h</span>
+                {myStats.rank === 1 ? (
+                  <span className="text-[9px] font-black text-emerald-500">あなたがトップです！</span>
+                ) : (
+                  <span className="text-[9px] font-black text-slate-400">あと {(parseFloat(topStats.hours) - parseFloat(myStats.hours)).toFixed(1)}h</span>
+                )}
               </div>
             </div>
             <div className="space-y-4">
@@ -356,9 +405,60 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 overflow-hidden">
-              <div className="flex justify-between items-center mb-6">
-                <div><h3 className="text-xl font-black text-slate-800">学習記録</h3><p className="text-xs font-bold text-slate-400 mt-1">{monday.toLocaleDateString('ja-JP')} 〜 {sunday.toLocaleDateString('ja-JP')}</p></div>
-                <div className="text-right"><p className="text-[10px] font-black text-slate-300 uppercase">Weekly Total</p><p className="text-xl font-black text-indigo-600">{weeklyTotalHours} h</p></div>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                <div>
+                  <h3 className="text-xl font-black text-slate-800">学習記録</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                      Ranking: {myStats.rank}位
+                    </span>
+                    <p className="text-xs font-bold text-slate-400">{monday.toLocaleDateString('ja-JP')} 〜 {sunday.toLocaleDateString('ja-JP')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                  <button 
+                    onClick={() => setWeekOffset(prev => prev - 1)}
+                    className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-400 hover:text-indigo-600 transition-all font-black border border-slate-100"
+                    title="先週"
+                  >
+                    ←
+                  </button>
+                  {weekOffset !== 0 && (
+                    <button 
+                      onClick={() => setWeekOffset(0)}
+                      className="px-4 py-2 text-[10px] font-black uppercase text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                    >
+                      今週
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setWeekOffset(prev => prev + 1)}
+                    className="w-10 h-10 flex items-center justify-center bg-white rounded-xl shadow-sm text-slate-400 hover:text-indigo-600 transition-all font-black border border-slate-100"
+                    title="翌週"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                 <div className="bg-slate-50 p-4 rounded-2xl">
+                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Your Total</p>
+                    <p className="text-2xl font-black text-indigo-600">{weeklyTotalHours}<span className="text-xs font-normal ml-0.5 opacity-50">h</span></p>
+                 </div>
+                 <div className="bg-slate-50 p-4 rounded-2xl">
+                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Top Score</p>
+                    <p className="text-2xl font-black text-amber-500">{topStats.hours}<span className="text-xs font-normal ml-0.5 opacity-50">h</span></p>
+                 </div>
+                 <div className="bg-slate-50 p-4 rounded-2xl">
+                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Class Rank</p>
+                    <p className="text-2xl font-black text-slate-800">{myStats.rank}<span className="text-xs font-normal ml-0.5 opacity-50">位</span></p>
+                 </div>
+                 <div className="bg-slate-50 p-4 rounded-2xl">
+                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Status</p>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${parseFloat(weeklyTotalHours) > 10 ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                      {parseFloat(weeklyTotalHours) > 10 ? 'EXCELLENT' : 'KEEP GOING'}
+                    </span>
+                 </div>
               </div>
               <div className="h-64 mb-6">
                 <ResponsiveContainer width="100%" height="100%">
@@ -373,18 +473,20 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-4">学習内容を記録する</h4>
-              <div className="flex flex-col md:flex-row gap-4 items-end">
-                <div className="flex-1 w-full"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">科目</label>
-                  <select value={logSubject} onChange={(e) => setLogSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold shadow-sm transition-all">{Object.keys(SUBJECT_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}</select>
+            {weekOffset === 0 && (
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-4">学習内容を記録する</h4>
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                  <div className="flex-1 w-full"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">科目</label>
+                    <select value={logSubject} onChange={(e) => setLogSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold shadow-sm transition-all">{Object.keys(SUBJECT_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}</select>
+                  </div>
+                  <div className="w-full md:w-32"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">時間(分)</label>
+                    <input type="number" value={logMinutes} onChange={(e) => setLogMinutes(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold text-center shadow-sm transition-all" />
+                  </div>
+                  <button onClick={handleManualLog} className="w-full md:w-auto px-8 py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95">記録を保存</button>
                 </div>
-                <div className="w-full md:w-32"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">時間(分)</label>
-                  <input type="number" value={logMinutes} onChange={(e) => setLogMinutes(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold text-center shadow-sm transition-all" />
-                </div>
-                <button onClick={handleManualLog} className="w-full md:w-auto px-8 py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95">記録を保存</button>
               </div>
-            </div>
+            )}
           </div>
           <div className="space-y-8">
             {currentUserStudent?.weeklyInstructorMessage && (<div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-200 shadow-md"><h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👨‍🏫</span> 講師からの言葉</h4><p className="text-sm font-bold text-slate-800 leading-relaxed italic">「{currentUserStudent.weeklyInstructorMessage}」</p></div>)}
