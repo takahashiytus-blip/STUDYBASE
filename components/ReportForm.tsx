@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Student, Report, AttendanceStatus } from '../types';
 import { generateProfessionalReport } from '../services/geminiService';
 import { generateUniqueId, getLocalISOString } from '../App';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
 
 interface ReportFormProps {
   students: Student[];
@@ -30,6 +31,72 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedPreview, setGeneratedPreview] = useState<Report['generatedContent'] | null>(null);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+
+  // 下書き保存用のタイマー
+  const draftTimerRef = useRef<number | null>(null);
+
+  // 下書きの読み込み (生徒選択時)
+  useEffect(() => {
+    if (!selectedStudentId) return;
+
+    const loadDraft = async () => {
+      // 1. ローカルから優先読み込み
+      const localDraft = localStorage.getItem(`report_draft_${selectedStudentId}`);
+      if (localDraft) {
+        const data = JSON.parse(localDraft);
+        setSubject(data.subject || '');
+        setRawNotes(data.rawNotes || '');
+        setHomeworkAssigned(data.homeworkAssigned || '');
+        setAttendanceStatus(data.attendanceStatus || 'present');
+      }
+
+      // 2. クラウド（Supabase）があれば最新を取得して上書き
+      if (isSupabaseConfigured && supabase) {
+        const { data } = await supabase
+          .from('report_drafts')
+          .select('data')
+          .eq('student_id', selectedStudentId)
+          .eq('instructor_id', currentUser.id)
+          .maybeSingle();
+        
+        if (data?.data) {
+          const d = data.data;
+          setSubject(d.subject || '');
+          setRawNotes(d.rawNotes || '');
+          setHomeworkAssigned(d.homeworkAssigned || '');
+          setAttendanceStatus(d.attendanceStatus || 'present');
+        }
+      }
+    };
+
+    loadDraft();
+  }, [selectedStudentId, currentUser.id]);
+
+  // 入力中の自動保存同期 (5秒間隔)
+  useEffect(() => {
+    if (!selectedStudentId) return;
+
+    if (draftTimerRef.current) clearInterval(draftTimerRef.current);
+    
+    draftTimerRef.current = window.setInterval(async () => {
+      const draftData = { subject, rawNotes, homeworkAssigned, attendanceStatus };
+      
+      // ローカル保存
+      localStorage.setItem(`report_draft_${selectedStudentId}`, JSON.stringify(draftData));
+      
+      // DB同期（DBがあれば）
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('report_drafts').upsert({
+          student_id: selectedStudentId,
+          instructor_id: currentUser.id,
+          data: draftData,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'student_id,instructor_id' });
+      }
+    }, 5000);
+
+    return () => { if (draftTimerRef.current) clearInterval(draftTimerRef.current); };
+  }, [selectedStudentId, subject, rawNotes, homeworkAssigned, attendanceStatus, currentUser.id]);
 
   const loadingMessages = [
     "AIが指導メモを読み解いています...",
@@ -117,7 +184,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     handlePreviewChange('homeworkList', newList);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!generatedPreview) return;
     const newReport: Report = {
       id: generateUniqueId('rep'),
@@ -137,6 +204,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
       quizScore: typeof quizScore === 'number' ? quizScore : undefined
     };
     onSave(newReport);
+    
+    // 下書きをクリア
+    localStorage.removeItem(`report_draft_${selectedStudentId}`);
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from('report_drafts').delete().eq('student_id', selectedStudentId).eq('instructor_id', currentUser.id);
+    }
+
     setSelectedStudentId('');
     setSubject('');
     setQuizScore('');
@@ -149,7 +223,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     <div className="space-y-6 animate-fadeIn pb-12">
       <header>
         <h2 className="text-3xl font-black text-slate-800 tracking-tight">指導報告書作成</h2>
-        <p className="text-slate-500 font-medium">授業内容からAIが宿題リストと日割り学習計画を自動構成します</p>
+        <p className="text-slate-500 font-medium">入力内容は自動保存され、他デバイスとも同期されます</p>
       </header>
 
       {errorMessage && (
@@ -272,7 +346,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
 
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col min-h-[600px]">
           <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-3">
-            <span className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-sm shadow-md">2</span>
+            <span className="w-9 h-9 rounded-xl bg-emerald-50 text-white flex items-center justify-center text-sm shadow-md">2</span>
             生成内容の確認
           </h3>
 

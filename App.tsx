@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
 import { supabase, isSupabaseConfigured } from './services/supabase';
@@ -68,6 +68,9 @@ const App: React.FC = () => {
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(DEFAULT_ADMIN);
 
+  // ポーリング用のタイマー
+  const syncTimerRef = useRef<number | null>(null);
+
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_reports', JSON.stringify(reports)); }, [reports, isLoading, isAuthenticated]);
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_students', JSON.stringify(students)); }, [students, isLoading, isAuthenticated]);
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_instructors', JSON.stringify(instructors)); }, [instructors, isLoading, isAuthenticated]);
@@ -75,30 +78,31 @@ const App: React.FC = () => {
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_timetable', JSON.stringify(timetable)); }, [timetable, isLoading, isAuthenticated]);
   useEffect(() => { if (!isLoading && isAuthenticated) localStorage.setItem('sb_data_mockExams', JSON.stringify(mockExams)); }, [mockExams, isLoading, isAuthenticated]);
 
-  const fetchAllData = useCallback(async () => {
+  const fetchAllData = useCallback(async (isSilent = false) => {
     if (!isSupabaseConfigured || !supabase) {
-      const localReports = localStorage.getItem('sb_data_reports');
-      const localStudents = localStorage.getItem('sb_data_students');
-      const localInstructors = localStorage.getItem('sb_data_instructors');
-      const localTimetable = localStorage.getItem('sb_data_timetable');
-      const localMockExams = localStorage.getItem('sb_data_mockExams');
-      const localSessions = localStorage.getItem('sb_data_sessions');
-      const savedAdmin = localStorage.getItem('study_base_admin_config');
+      if (!isSilent) {
+        const localReports = localStorage.getItem('sb_data_reports');
+        const localStudents = localStorage.getItem('sb_data_students');
+        const localInstructors = localStorage.getItem('sb_data_instructors');
+        const localTimetable = localStorage.getItem('sb_data_timetable');
+        const localMockExams = localStorage.getItem('sb_data_mockExams');
+        const localSessions = localStorage.getItem('sb_data_sessions');
+        const savedAdmin = localStorage.getItem('study_base_admin_config');
 
-      setReports(localReports ? JSON.parse(localReports) : MOCK_REPORTS);
-      setStudents(localStudents ? JSON.parse(localStudents) : MOCK_STUDENTS);
-      setInstructors(localInstructors ? JSON.parse(localInstructors) : MOCK_INSTRUCTORS);
-      setTimetable(localTimetable ? JSON.parse(localTimetable) : MOCK_TIMETABLE);
-      setMockExams(localMockExams ? JSON.parse(localMockExams) : []);
-      setAllSessions(localSessions ? JSON.parse(localSessions) : []);
-      if (savedAdmin) setAdminConfig(JSON.parse(savedAdmin));
-      
-      setIsLoading(false);
+        setReports(localReports ? JSON.parse(localReports) : MOCK_REPORTS);
+        setStudents(localStudents ? JSON.parse(localStudents) : MOCK_STUDENTS);
+        setInstructors(localInstructors ? JSON.parse(localInstructors) : MOCK_INSTRUCTORS);
+        setTimetable(localTimetable ? JSON.parse(localTimetable) : MOCK_TIMETABLE);
+        setMockExams(localMockExams ? JSON.parse(localMockExams) : []);
+        setAllSessions(localSessions ? JSON.parse(localSessions) : []);
+        if (savedAdmin) setAdminConfig(JSON.parse(savedAdmin));
+        setIsLoading(false);
+      }
       return;
     }
 
     try {
-      setIsLoading(true);
+      if (!isSilent) setIsLoading(true);
       const { data: adminData } = await supabase.from('admin_config').select('*').eq('id', 1).maybeSingle();
       if (adminData) {
         setAdminConfig({
@@ -153,7 +157,6 @@ const App: React.FC = () => {
         generatedContent: r.generated_content || r.generatedContent, 
         quizScore: r.quiz_score || r.quizScore, 
         messages: r.messages || [], 
-        // Fix: Changed property name to 'needsAction' to match Report interface
         needsAction: r.needs_action || r.needsAction
       })));
 
@@ -194,12 +197,18 @@ const App: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { fetchAllData(); }, [fetchAllData]);
+  // 初回読み込みとポーリング設定
+  useEffect(() => { 
+    fetchAllData(); 
+    if (isSupabaseConfigured && isAuthenticated) {
+      syncTimerRef.current = window.setInterval(() => fetchAllData(true), 30000); // 30秒ごとにバックグラウンドで同期
+    }
+    return () => { if (syncTimerRef.current) clearInterval(syncTimerRef.current); };
+  }, [fetchAllData, isAuthenticated]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // 役割に基づいた厳格な認証チェック
     if (loginRole === 'admin') {
       if (loginId === adminConfig.loginId && password === adminConfig.passwordHash) {
         setCurrentUser({ role: 'admin', id: 'admin', name: adminConfig.name });
@@ -216,7 +225,6 @@ const App: React.FC = () => {
       }
       alert('講師ログイン情報が正しくありません。');
     } else {
-      // 生徒・保護者ログイン（loginRole は 'student' または 'parent'）
       const std = students.find(s => s.loginId === loginId && s.password === password);
       if (std) {
         setCurrentUser({ role: loginRole, id: std.id, name: std.name });
@@ -227,7 +235,12 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => { setIsAuthenticated(false); setAuthStep('role-selection'); setActiveTab('dashboard'); };
+  const handleLogout = () => { 
+    if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+    setIsAuthenticated(false); 
+    setAuthStep('role-selection'); 
+    setActiveTab('dashboard'); 
+  };
 
   const handleUpdateAdminConfig = async (updates: Partial<AdminConfig>) => {
     setAdminConfig(prev => {
@@ -284,7 +297,6 @@ const App: React.FC = () => {
         session_year: report.sessionYear, session_month: report.sessionMonth, session_count: report.sessionCount,
         attendance_status: report.attendanceStatus, raw_notes: report.rawNotes, homework_assigned: report.homeworkAssigned,
         homework_completion: report.homeworkCompletion, proposed_self_study_days: report.proposedSelfStudyDays,
-        // Fix: Property 'needs_action' expects report.needsAction (camelCase) from Report type.
         generated_content: report.generatedContent, quiz_score: report.quizScore, messages: report.messages || [], needs_action: report.needsAction || false
       });
     }
@@ -454,7 +466,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 2.5.0</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 2.5.1</p>
       </div>
     </div>
   );
