@@ -10,6 +10,7 @@ interface StudentCenterProps {
   students: Student[];
   reports: Report[];
   allSessions: StudySession[];
+  instructors: { id: string }[]; // 修正: 実在する講師リストを受け取る
   currentUser: { role: UserRole; id: string; name: string };
   onAddMessage: (reportId: string, text: string) => void;
   onDeleteMessage: (reportId: string, messageId: string) => void;
@@ -34,6 +35,7 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
   students, 
   reports, 
   allSessions,
+  instructors,
   currentUser, 
   onAddMessage, 
   onDeleteMessage,
@@ -61,9 +63,14 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
 
   const isAdmin = currentUser.role === 'admin';
 
-  const filteredStudents = currentUser.role === 'admin' 
-    ? students 
-    : students.filter(s => s.instructorIds.includes(currentUser.id));
+  // フィルタリング: 講師削除後の不整合を解消
+  const filteredStudents = useMemo(() => {
+    if (currentUser.role === 'admin') return students;
+    return students.filter(s => {
+      // 自身が担当講師リストに入っている、かつ、その講師実体がまだ存在する場合
+      return s.instructorIds.some(id => id === currentUser.id && instructors.some(i => i.id === id));
+    });
+  }, [students, instructors, currentUser]);
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
   const studentReports = reports.filter(r => r.studentId === selectedStudentId);
@@ -94,7 +101,6 @@ const StudentCenter: React.FC<StudentCenterProps> = ({
   }, [selectedStudentId, allSessions, monday, sunday]);
 
   const getWeeklyHoursForStudent = (studentId: string) => {
-    // リスト表示用：常に「今週」の時間を返す
     const now = new Date();
     const dayOfWeek = now.getDay() || 7;
     const m = new Date(now);

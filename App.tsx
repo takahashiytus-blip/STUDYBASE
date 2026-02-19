@@ -68,11 +68,11 @@ const App: React.FC = () => {
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(DEFAULT_ADMIN);
 
-  const syncTimerRef = useRef<number | null>(null);
   const isUpdatingRef = useRef<boolean>(false);
+  const updateTimeoutRef = useRef<number | null>(null);
 
+  // データの取得ロジック
   const fetchAllData = useCallback(async (isSilent = false) => {
-    // データ更新中はフェッチをスキップして、編集中ステートの上書きを防止
     if (isUpdatingRef.current && isSilent) return;
 
     if (!isSupabaseConfigured || !supabase) {
@@ -205,28 +205,35 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // リアルタイム同期 & フォーカス復帰の設定
   useEffect(() => { 
     fetchAllData(); 
-    if (isSupabaseConfigured && isAuthenticated) {
-      // 同期サイクルを5秒に短縮
-      syncTimerRef.current = window.setInterval(() => fetchAllData(true), 5000); 
+    
+    if (isSupabaseConfigured && supabase && isAuthenticated) {
+      // 全テーブルの変更を監視するチャネル
+      const channel = supabase.channel('schema-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+          fetchAllData(true); // 何か変更があれば即座に再取得
+        })
+        .subscribe();
 
-      // スマホ版等の同期遅延を防ぐため、タブ復帰（フォーカス）時に即時同期する
+      // 補助的に5秒ごとのポーリング
+      const syncTimer = window.setInterval(() => fetchAllData(true), 5000); 
+
+      // タブ復帰時の強制取得
       const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          fetchAllData(true);
-        }
+        if (document.visibilityState === 'visible') fetchAllData(true);
       };
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('focus', () => fetchAllData(true));
 
       return () => {
-        if (syncTimerRef.current) clearInterval(syncTimerRef.current);
+        supabase.removeChannel(channel);
+        clearInterval(syncTimer);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('focus', () => fetchAllData(true));
       };
     }
-    return () => { if (syncTimerRef.current) clearInterval(syncTimerRef.current); };
   }, [fetchAllData, isAuthenticated]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -258,18 +265,31 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => { 
-    if (syncTimerRef.current) clearInterval(syncTimerRef.current);
     setIsAuthenticated(false); 
     setAuthStep('role-selection'); 
     setActiveTab('dashboard'); 
   };
 
+  // セーフティロック制御
+  const startUpdate = () => {
+    isUpdatingRef.current = true;
+    if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
+    updateTimeoutRef.current = window.setTimeout(() => {
+      isUpdatingRef.current = false; // 10秒経っても終わらなければ強制解放
+    }, 10000);
+  };
+
+  const endUpdate = () => {
+    isUpdatingRef.current = false;
+    if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
+  };
+
   // ---------------------------------------------------------
-  // データ同期の完全性を保証するための同期化ハンドラ
+  // 同期化ハンドラ ( Realtime 導入により、より確実に )
   // ---------------------------------------------------------
 
   const handleUpdateAdminConfig = async (updates: Partial<AdminConfig>) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       let latestConfig: AdminConfig = { ...adminConfig, ...updates };
       setAdminConfig(latestConfig);
@@ -284,16 +304,14 @@ const App: React.FC = () => {
           word_king_holder: latestConfig.wordKingClassroomHolder
         }).eq('id', 1);
         await fetchAllData(true);
-      } else {
-        localStorage.setItem('study_base_admin_config', JSON.stringify(latestConfig));
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleUpdateStudent = async (id: string, updates: Partial<Student>) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       setStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
       
@@ -317,12 +335,12 @@ const App: React.FC = () => {
         }
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleAddStudent = async (d: Omit<Student, 'id' | 'instructorIds'>) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       const id = generateUniqueId('s');
       if (isSupabaseConfigured && supabase) {
@@ -331,30 +349,27 @@ const App: React.FC = () => {
           target_school: d.targetSchool, target_faculty: d.targetFaculty 
         });
         await fetchAllData(true);
-      } else {
-        setStudents(prev => [...prev, { ...d, id, instructorIds: [] }]);
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleDeleteStudent = async (id: string) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
+      setStudents(prev => prev.filter(s => s.id !== id));
       if (isSupabaseConfigured && supabase) {
         await supabase.from('students').delete().eq('id', id);
         await fetchAllData(true);
-      } else {
-        setStudents(prev => prev.filter(s => s.id !== id));
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleLogSession = async (session: StudySession) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('study_sessions').insert({
@@ -362,16 +377,14 @@ const App: React.FC = () => {
           subject: session.subject, minutes: session.minutes
         });
         await fetchAllData(true);
-      } else {
-        setAllSessions(prev => [...prev, session]);
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleSaveReport = async (report: Report) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('reports').insert({
@@ -383,37 +396,33 @@ const App: React.FC = () => {
           messages: report.messages || [], needs_action: report.needsAction || false
         });
         await fetchAllData(true);
-      } else {
-        setReports(prev => [report, ...prev]);
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleUpdateReport = async (reportId: string, updates: Partial<Report>) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       setReports(prev => prev.map(r => r.id === reportId ? { ...r, ...updates } : r));
-
       if (isSupabaseConfigured && supabase) {
         const dbUpdates: any = {};
         if (updates.messages !== undefined) dbUpdates.messages = updates.messages;
         if (updates.needsAction !== undefined) dbUpdates.needs_action = updates.needsAction;
         if (updates.generatedContent !== undefined) dbUpdates.generated_content = updates.generatedContent;
-        
         if (Object.keys(dbUpdates).length > 0) {
           await supabase.from('reports').update(dbUpdates).eq('id', reportId);
           await fetchAllData(true);
         }
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleAddReportMessage = async (reportId: string, text: string) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       let currentMessages: ReportMessage[] = [];
       let currentNeedsAction = false;
@@ -423,12 +432,6 @@ const App: React.FC = () => {
         if (data) {
           currentMessages = data.messages || [];
           currentNeedsAction = data.needs_action || false;
-        }
-      } else {
-        const report = reports.find(r => r.id === reportId);
-        if (report) {
-          currentMessages = report.messages || [];
-          currentNeedsAction = report.needsAction || false;
         }
       }
 
@@ -449,70 +452,57 @@ const App: React.FC = () => {
         needsAction: shouldNeedAction ? true : currentNeedsAction 
       });
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleDeleteReportMessage = async (reportId: string, messageId: string) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       let currentMessages: ReportMessage[] = [];
       if (isSupabaseConfigured && supabase) {
         const { data } = await supabase.from('reports').select('messages').eq('id', reportId).maybeSingle();
         if (data) currentMessages = data.messages || [];
-      } else {
-        const report = reports.find(r => r.id === reportId);
-        if (report) currentMessages = report.messages || [];
       }
-
       const updatedMessages = currentMessages.filter(m => m.id !== messageId);
       await handleUpdateReport(reportId, { messages: updatedMessages });
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleUpdateTimetable = async (newTimetable: TimetableEntry[]) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
-         try {
-           await supabase.from('timetable').delete().neq('id', 'temp_id_flush_preventer');
-           const insertData = newTimetable.map(t => ({
-             id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
-             subject: t.subject, student_id: t.studentId, instructor_id: t.instructorId, room: t.room
-           }));
-           if (insertData.length > 0) {
-             await supabase.from('timetable').insert(insertData);
-           }
-         } finally {
-           await fetchAllData(true);
-         }
-      } else {
-        setTimetable(newTimetable);
+        await supabase.from('timetable').delete().neq('id', 'temp_id_flush_preventer');
+        const insertData = newTimetable.map(t => ({
+          id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
+          subject: t.subject, student_id: t.studentId, instructor_id: t.instructorId, room: t.room
+        }));
+        if (insertData.length > 0) await supabase.from('timetable').insert(insertData);
+        await fetchAllData(true);
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleAddInstructor = async (d: Omit<Instructor, 'id'>) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       const id = generateUniqueId('i');
       if (isSupabaseConfigured && supabase) {
         await supabase.from('instructors').insert({ id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password });
         await fetchAllData(true);
-      } else {
-        setInstructors(prev => [...prev, { ...d, id }]);
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleUpdateInstructor = async (id: string, upd: Partial<Instructor>) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
         const dbUpd: any = {};
@@ -522,122 +512,92 @@ const App: React.FC = () => {
         if (upd.password) dbUpd.password = upd.password;
         await supabase.from('instructors').update(dbUpd).eq('id', id);
         await fetchAllData(true);
-      } else {
-        setInstructors(prev => prev.map(i => i.id === id ? { ...i, ...upd } : i));
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleDeleteInstructor = async (id: string) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
-      // 楽観的更新（即座に消す）
+      // 楽観的更新
       setInstructors(prev => prev.filter(i => i.id !== id));
-      
       if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.from('instructors').delete().eq('id', id);
-        if (error) {
-          console.error("Delete failed:", error);
-          alert("削除に失敗しました。ネットワークを確認してください。");
-        }
+        await supabase.from('instructors').delete().eq('id', id);
         await fetchAllData(true);
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleAddMockExam = async (e: MockExam) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').insert({ id: e.id, student_id: e.studentId, exam_name: e.examName, exam_date: e.examDate, scores: e.scores });
         await fetchAllData(true);
-      } else {
-        setMockExams(prev => [e, ...prev]);
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleUpdateMockExam = async (e: MockExam) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').update({ exam_name: e.examName, exam_date: e.examDate, scores: e.scores }).eq('id', e.id);
         await fetchAllData(true);
-      } else {
-        setMockExams(prev => prev.map(m => m.id === e.id ? e : m));
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleDeleteMockExam = async (id: string) => {
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').delete().eq('id', id);
         await fetchAllData(true);
-      } else {
-        setMockExams(prev => prev.filter(m => m.id !== id));
       }
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleSaveIQ = async (score: number, breakdown: any, analysis: string) => {
     if (currentUser.role !== 'student') return;
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       let latestHistory: IQResult[] = [];
       if (isSupabaseConfigured && supabase) {
         const { data } = await supabase.from('students').select('iq_history').eq('id', currentUser.id).maybeSingle();
         if (data) latestHistory = data.iq_history || [];
-      } else {
-        const s = students.find(std => std.id === currentUser.id);
-        if (s) latestHistory = s.iqHistory || [];
       }
-
       const newIQ: IQResult = {
-        id: generateUniqueId('iq'),
-        date: getLocalISOString(),
-        score,
-        estimatedIQ: Math.round(100 + (score - 50) * 0.8),
-        breakdown,
-        aiAnalysis: analysis
+        id: generateUniqueId('iq'), date: getLocalISOString(), score, estimatedIQ: Math.round(100 + (score - 50) * 0.8), breakdown, aiAnalysis: analysis
       };
-      
-      const updatedHistory = [newIQ, ...latestHistory];
-      await handleUpdateStudent(currentUser.id, { iqHistory: updatedHistory });
+      await handleUpdateStudent(currentUser.id, { iqHistory: [newIQ, ...latestHistory] });
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
   const handleUpdateWordKingBest = async (newScore: number) => {
     if (currentUser.role !== 'student') return;
-    isUpdatingRef.current = true;
+    startUpdate();
     try {
       let currentBest = 0;
       if (isSupabaseConfigured && supabase) {
         const { data } = await supabase.from('students').select('word_king_best').eq('id', currentUser.id).maybeSingle();
         if (data) currentBest = data.word_king_best || 0;
-      } else {
-        const s = students.find(std => std.id === currentUser.id);
-        if (s) currentBest = s.wordKingBest || 0;
       }
-
-      if (newScore > currentBest) {
-        await handleUpdateStudent(currentUser.id, { wordKingBest: newScore });
-      }
+      if (newScore > currentBest) await handleUpdateStudent(currentUser.id, { wordKingBest: newScore });
     } finally {
-      isUpdatingRef.current = false;
+      endUpdate();
     }
   };
 
@@ -664,21 +624,15 @@ const App: React.FC = () => {
           if (isSupabaseConfigured && supabase) {
             const { data } = await supabase.from('students').select('instructor_ids').eq('id', sid).maybeSingle();
             if (data) currentIds = data.instructor_ids || [];
-          } else {
-            currentIds = students.find(s => s.id === sid)?.instructorIds || [];
           }
-          const merged = Array.from(new Set([...currentIds, iid]));
-          await handleUpdateStudent(sid, { instructorIds: merged });
+          await handleUpdateStudent(sid, { instructorIds: Array.from(new Set([...currentIds, iid])) });
         }} onRemoveStudent={async (sid, iid) => {
           let currentIds: string[] = [];
           if (isSupabaseConfigured && supabase) {
             const { data } = await supabase.from('students').select('instructor_ids').eq('id', sid).maybeSingle();
             if (data) currentIds = data.instructor_ids || [];
-          } else {
-            currentIds = students.find(s => s.id === sid)?.instructorIds || [];
           }
-          const filtered = currentIds.filter(id => id !== iid);
-          await handleUpdateStudent(sid, { instructorIds: filtered });
+          await handleUpdateStudent(sid, { instructorIds: currentIds.filter(id => id !== iid) });
         }} onUpdateInstructor={handleUpdateInstructor} onAddInstructor={handleAddInstructor} onDeleteInstructor={handleDeleteInstructor} />;
       case 'salary': return <SalaryCenter instructors={instructors} reports={reports} />;
       case 'mock':
@@ -709,7 +663,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 2.6.9</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 2.7.0</p>
       </div>
     </div>
   );
