@@ -149,6 +149,13 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
     resetForm();
   };
 
+  const handleDeleteClick = (id: string) => {
+    if (!isPrivileged || !onDelete) return;
+    if (window.confirm('この成績データを完全に削除しますか？')) {
+      onDelete(id);
+    }
+  };
+
   const renderSubjectGrid = () => {
     if (!selectedStudent) return null;
 
@@ -372,7 +379,7 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                     </button>
                     {onDelete && (
                       <button 
-                        onClick={() => onDelete(exam.id)}
+                        onClick={() => handleDeleteClick(exam.id)}
                         className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all shadow-sm"
                         title="削除する"
                       >
@@ -384,7 +391,9 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
               </div>
               <div className="p-8">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {Object.entries(exam.scores).filter(([_, data]) => data.score !== undefined || data.deviation !== undefined).map(([id, data]) => {
+                  {/* Fix: Added explicit type casting for 'data' when filtering and mapping over Object.entries(exam.scores) to resolve 'unknown' property access errors. */}
+                  {Object.entries(exam.scores).filter(([_, data]) => (data as SubjectData).score !== undefined || (data as SubjectData).deviation !== undefined).map(([id, data]) => {
+                    const subjectData = data as SubjectData;
                     let label = id;
                     const jh = JUNIOR_HIGH_SUBJECTS.find(s => s.id === id);
                     if (jh) label = jh.label;
@@ -400,13 +409,13 @@ const MockExamCenter: React.FC<MockExamCenterProps> = ({
                         <div className="flex justify-between items-end">
                           <div className="flex flex-col">
                             <span className="text-[9px] text-slate-400 font-bold">得点</span>
-                            <span className="text-xl font-black text-slate-800">{data.score ?? '--'}<span className="text-[10px] ml-0.5 text-slate-400 font-normal">点</span></span>
+                            <span className="text-xl font-black text-slate-800">{subjectData.score ?? '--'}<span className="text-[10px] ml-0.5 text-slate-400 font-normal">点</span></span>
                           </div>
                           <div className="flex flex-col items-end">
                             <span className="text-[9px] text-indigo-400 font-bold">偏差値</span>
                             <span className="text-xl font-black text-indigo-600">
                               <span className="text-[10px] mr-1 text-indigo-300 font-normal">SS</span>
-                              {data.deviation ?? '--'}
+                              {subjectData.deviation ?? '--'}
                             </span>
                           </div>
                         </div>

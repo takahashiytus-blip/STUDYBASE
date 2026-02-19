@@ -32,39 +32,42 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   const [generatedPreview, setGeneratedPreview] = useState<Report['generatedContent'] | null>(null);
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
 
-  // 下書き保存用のタイマー
   const draftTimerRef = useRef<number | null>(null);
+  const lastSavedDraftRef = useRef<string>('');
 
-  // 下書きの読み込み (生徒選択時)
+  // 下書きの読み込み
   useEffect(() => {
     if (!selectedStudentId) return;
 
     const loadDraft = async () => {
-      // 1. ローカルから優先読み込み
-      const localDraft = localStorage.getItem(`report_draft_${selectedStudentId}`);
-      if (localDraft) {
-        const data = JSON.parse(localDraft);
+      // 1. まずローカルを適用
+      const localDraftStr = localStorage.getItem(`report_draft_${selectedStudentId}`);
+      if (localDraftStr) {
+        const data = JSON.parse(localDraftStr);
         setSubject(data.subject || '');
         setRawNotes(data.rawNotes || '');
         setHomeworkAssigned(data.homeworkAssigned || '');
         setAttendanceStatus(data.attendanceStatus || 'present');
+        lastSavedDraftRef.current = localDraftStr;
       }
 
-      // 2. クラウド（Supabase）があれば最新を取得して上書き
+      // 2. クラウドから最新を取得
       if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('report_drafts')
           .select('data')
           .eq('student_id', selectedStudentId)
           .eq('instructor_id', currentUser.id)
           .maybeSingle();
         
-        if (data?.data) {
+        // ローカルにデータがない場合、または明示的に異なる場合にのみ上書き
+        if (data?.data && !localDraftStr) {
           const d = data.data;
           setSubject(d.subject || '');
           setRawNotes(d.rawNotes || '');
           setHomeworkAssigned(d.homeworkAssigned || '');
           setAttendanceStatus(d.attendanceStatus || 'present');
+          lastSavedDraftRef.current = JSON.stringify(d);
         }
       }
     };
@@ -72,7 +75,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     loadDraft();
   }, [selectedStudentId, currentUser.id]);
 
-  // 入力中の自動保存同期 (5秒間隔)
+  // 自動保存
   useEffect(() => {
     if (!selectedStudentId) return;
 
@@ -80,11 +83,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     
     draftTimerRef.current = window.setInterval(async () => {
       const draftData = { subject, rawNotes, homeworkAssigned, attendanceStatus };
+      const draftStr = JSON.stringify(draftData);
       
-      // ローカル保存
-      localStorage.setItem(`report_draft_${selectedStudentId}`, JSON.stringify(draftData));
+      // 内容に変更がある場合のみ保存
+      if (draftStr === lastSavedDraftRef.current) return;
+
+      localStorage.setItem(`report_draft_${selectedStudentId}`, draftStr);
+      lastSavedDraftRef.current = draftStr;
       
-      // DB同期（DBがあれば）
       if (isSupabaseConfigured && supabase) {
         await supabase.from('report_drafts').upsert({
           student_id: selectedStudentId,
@@ -205,7 +211,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     };
     onSave(newReport);
     
-    // 下書きをクリア
+    // 下書きの削除
     localStorage.removeItem(`report_draft_${selectedStudentId}`);
     if (isSupabaseConfigured && supabase) {
       await supabase.from('report_drafts').delete().eq('student_id', selectedStudentId).eq('instructor_id', currentUser.id);

@@ -47,7 +47,8 @@ const ReportList: React.FC<ReportListProps> = ({
       : reports.filter(r => r.studentId === currentUser.id);
 
     const months = relevantReports.map(r => r.date.substring(0, 7)); // "YYYY-MM"
-    return Array.from(new Set(months)).sort((a, b) => b.localeCompare(a));
+    // Fix: Explicitly cast parameters to string to resolve "Property 'localeCompare' does not exist on type 'unknown'"
+    return Array.from(new Set(months)).sort((a, b) => (b as string).localeCompare(a as string));
   }, [reports, currentUser]);
 
   // 存在する「科目」の選択肢をデータから自動抽出

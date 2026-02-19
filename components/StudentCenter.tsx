@@ -16,7 +16,7 @@ interface StudentCenterProps {
   onMarkResolved: (reportId: string) => void;
   onAddStudent?: (student: Omit<Student, 'id' | 'instructorIds'>) => void;
   onUpdateStudent?: (studentId: string, updates: Partial<Student>) => void;
-  onDeleteStudent?: (studentId: string, onDeleteComplete?: () => void) => void;
+  onDeleteStudent?: (studentId: string) => void;
 }
 
 const SUBJECT_CONFIG: Record<string, { color: string; label: string }> = {
