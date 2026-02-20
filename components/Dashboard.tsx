@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend } from 'recharts';
 import { Report, Student, UserRole, StudySession, MockExam, TimetableEntry, Instructor } from '../types';
-// Fix: Import utility functions from '../utils' instead of '../App'
 import { parseSafeDate, getLocalISOString } from '../utils';
 
 interface DashboardProps {
@@ -31,14 +30,40 @@ const calculateRemainingDays = (targetDateStr: string) => {
   return diffDays > 0 ? diffDays : 0;
 };
 
+// 科目設定の拡張（高校生科目にも対応）
 const SUBJECT_CONFIG: Record<string, { color: string; label: string }> = {
   '数学': { color: '#6366f1', label: '数' },
+  '数学IA': { color: '#6366f1', label: 'IA' },
+  '数学IIBC': { color: '#4f46e5', label: 'IIBC' },
+  '数学III': { color: '#3730a3', label: 'III' },
   '英語': { color: '#f43f5e', label: '英' },
+  '英語R': { color: '#f43f5e', label: '英R' },
+  '英語L': { color: '#e11d48', label: '英L' },
   '国語': { color: '#f59e0b', label: '国' },
+  '現代文': { color: '#f59e0b', label: '現' },
+  '古文・漢文': { color: '#d97706', label: '古' },
   '理科': { color: '#10b981', label: '理' },
+  '物理': { color: '#10b981', label: '物' },
+  '化学': { color: '#059669', label: '化' },
+  '生物': { color: '#047857', label: '生' },
   '社会': { color: '#0ea5e9', label: '社' },
+  '日本史': { color: '#0ea5e9', label: '日' },
+  '世界史': { color: '#0284c7', label: '世' },
+  '地理': { color: '#0369a1', label: '地' },
+  '情報': { color: '#8b5cf6', label: '情' },
+  '小論文': { color: '#ec4899', label: '論' },
   'その他': { color: '#64748b', label: '他' },
 };
+
+const JHS_SUBJECTS = ['数学', '英語', '国語', '理科', '社会', 'その他'];
+const HS_SUBJECTS = [
+  '数学IA', '数学IIBC', '数学III', 
+  '英語R', '英語L', 
+  '現代文', '古文・漢文', 
+  '物理', '化学', '生物', 
+  '日本史', '世界史', '地理', 
+  '情報', '小論文', 'その他'
+];
 
 const DAY_NAMES_JP = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -66,8 +91,17 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [customMins, setCustomMins] = useState('25');
   const timerRef = useRef<number | null>(null);
 
-  const [logSubject, setLogSubject] = useState('数学');
+  // 学年に応じた初期科目の設定
+  const isHS = currentUserStudent?.grade.includes('高校');
+  const initialSubject = isHS ? '数学IA' : '数学';
+  
+  const [logSubject, setLogSubject] = useState(initialSubject);
   const [logMinutes, setLogMinutes] = useState('60');
+
+  // 学年が変わった場合（ログインユーザー切り替え時など）に科目をリセット
+  useEffect(() => {
+    setLogSubject(isHS ? '数学IA' : '数学');
+  }, [isHS]);
 
   const [target1Label, setTarget1Label] = useState(currentUserStudent?.targets?.label1 || '高校入試当日');
   const [target1DateStr, setTarget1DateStr] = useState(currentUserStudent?.targets?.date1 || '2025-03-10');
@@ -75,7 +109,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [target2DateStr, setTarget2DateStr] = useState(currentUserStudent?.targets?.date2 || '2024-11-20');
   const [isEditingCountdown, setIsEditingCountdown] = useState(false);
 
-  // 週のオフセット管理
   const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
@@ -113,20 +146,15 @@ const Dashboard: React.FC<DashboardProps> = ({
     return { monday: m, sunday: s };
   }, [weekOffset]);
 
-  // 選択された週の「全生徒」の学習時間を集計してランキング作成
   const rankingData = useMemo(() => {
     const stats: Record<string, number> = {};
-    // まず全生徒を0で初期化
     students.forEach(s => stats[s.id] = 0);
-    
-    // セッションを集計
     allSessions.forEach(s => {
       const d = parseSafeDate(s.date);
       if (d >= monday && d <= sunday) {
         stats[s.studentId] = (stats[s.studentId] || 0) + s.minutes;
       }
     });
-
     return Object.entries(stats)
       .map(([id, minutes]) => ({ id, minutes }))
       .sort((a, b) => b.minutes - a.minutes);
@@ -144,11 +172,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     const sid = currentUserStudent?.id || currentUserId;
     const minutes = rankingData.find(r => r.id === sid)?.minutes || 0;
     const rank = rankingData.findIndex(r => r.id === sid) + 1;
-    return {
-      minutes,
-      hours: (minutes / 60).toFixed(1),
-      rank
-    };
+    return { minutes, hours: (minutes / 60).toFixed(1), rank };
   }, [rankingData, currentUserStudent, currentUserId]);
 
   const filteredSessions = useMemo(() => {
@@ -209,6 +233,9 @@ const Dashboard: React.FC<DashboardProps> = ({
       subject: logSubject,
       minutes: mins
     });
+
+    // 重要な修正：同期不具合を防ぐため、保存後に入力状態をリセット
+    setLogMinutes('60');
   };
 
   const diffDays1 = useMemo(() => calculateRemainingDays(target1DateStr), [target1DateStr]);
@@ -225,9 +252,11 @@ const Dashboard: React.FC<DashboardProps> = ({
       const dateStr = `${year}-${month}-${day}`;
       const dayNameJp = DAY_NAMES_JP[d.getDay()];
       const entry: any = { dateLabel: dayNameJp, date: dateStr };
+      
+      // SUBJECT_CONFIGに存在する全科目の集計を行う
       Object.keys(SUBJECT_CONFIG).forEach(sub => {
         const mins = filteredSessions.filter(s => s.date === dateStr && s.subject === sub).reduce((a, c) => a + c.minutes, 0);
-        entry[sub] = parseFloat((mins / 60).toFixed(1));
+        if (mins > 0) entry[sub] = parseFloat((mins / 60).toFixed(1));
       });
       data.push(entry);
     }
@@ -249,6 +278,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     const sid = currentUserStudent?.id || currentUserId;
     return timetable.filter(t => t.studentId === sid).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
   }, [timetable, currentUserId, isAdmin, role, currentUserStudent]);
+
+  const currentSubjectList = isHS ? HS_SUBJECTS : JHS_SUBJECTS;
 
   return (
     <div className="space-y-6 md:space-y-8 animate-fadeIn pb-12">
@@ -330,14 +361,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Focus Timer</p>
                   <div className="flex bg-white/10 p-1 rounded-xl">
                     <button onClick={() => setTimerMode('up')} className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${timerMode === 'up' ? 'bg-indigo-600 text-white' : 'text-slate-50'}`}>UP</button>
-                    <button onClick={() => setTimerMode('down')} className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${timerMode === 'down' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>DOWN</button>
+                    <button onClick={() => setTimerMode('down')} className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${timerMode === 'down' ? 'bg-indigo-600 text-white' : 'text-slate-50'}`}>DOWN</button>
                   </div>
                 </div>
                 <div className="flex-1 flex flex-col items-center justify-center gap-6 z-[20]">
                   <span className={`text-6xl font-mono font-black tracking-tighter ${timerSeconds === 0 && timerMode === 'down' ? 'text-rose-500 animate-pulse' : 'text-emerald-400'}`}>{formatTime(timerSeconds)}</span>
                   <div className="w-full space-y-4">
                     <div className="grid grid-cols-5 gap-1.5">
-                      {[50, 60, 70, 80, 90].map(m => (
+                      {[25, 45, 60, 75, 90].map(m => (
                         <button key={m} onClick={() => handleSetTimer(m)} className="bg-white/10 hover:bg-white/20 py-2.5 rounded-xl text-[11px] font-black transition-all border border-white/5">{m}m</button>
                       ))}
                     </div>
@@ -469,7 +500,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <YAxis fontSize={10} tickLine={false} axisLine={false} />
                     <Tooltip />
                     <Legend iconType="circle" iconSize={4} wrapperStyle={{ paddingTop: '20px', fontSize: '8px' }} />
-                    {Object.entries(SUBJECT_CONFIG).map(([sub, config]) => <Bar key={sub} dataKey={sub} name={config.label} fill={config.color} stackId="a" barSize={14} />)}
+                    {/* 設定されている全科目を動的に描画 */}
+                    {Object.entries(SUBJECT_CONFIG).map(([sub, config]) => (
+                      <Bar key={sub} dataKey={sub} name={config.label} fill={config.color} stackId="a" barSize={14} />
+                    ))}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -478,11 +512,23 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest mb-4">学習内容を記録する</h4>
                 <div className="flex flex-col md:flex-row gap-4 items-end">
-                  <div className="flex-1 w-full"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">科目</label>
-                    <select value={logSubject} onChange={(e) => setLogSubject(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold shadow-sm transition-all">{Object.keys(SUBJECT_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}</select>
+                  <div className="flex-1 w-full">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">科目 ({isHS ? '高校生モード' : '中学生モード'})</label>
+                    <select 
+                      value={logSubject} 
+                      onChange={(e) => setLogSubject(e.target.value)} 
+                      className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold shadow-sm transition-all"
+                    >
+                      {currentSubjectList.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                   <div className="w-full md:w-32"><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">時間(分)</label>
-                    <input type="number" value={logMinutes} onChange={(e) => setLogMinutes(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold text-center shadow-sm transition-all" />
+                    <input 
+                      type="number" 
+                      value={logMinutes} 
+                      onChange={(e) => setLogMinutes(e.target.value)} 
+                      className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-500 outline-none font-bold text-center shadow-sm transition-all" 
+                    />
                   </div>
                   <button onClick={handleManualLog} className="w-full md:w-auto px-8 py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95">記録を保存</button>
                 </div>

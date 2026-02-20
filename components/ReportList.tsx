@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Report, Student, UserRole, ReportMessage, AttendanceStatus } from '../types';
-// Fix: Import parseSafeDate from '../utils' instead of '../App'
 import { parseSafeDate } from '../utils';
 
 interface ReportListProps {
@@ -14,7 +13,7 @@ interface ReportListProps {
   onUpdateReport?: (reportId: string, updates: Partial<Report>) => void;
   title?: string;
   hideHeader?: boolean;
-  showFilters?: boolean; // フィルタ機能を表示するかどうか
+  showFilters?: boolean; 
 }
 
 const ReportList: React.FC<ReportListProps> = ({ 
@@ -34,25 +33,21 @@ const ReportList: React.FC<ReportListProps> = ({
   const [editBuffer, setEditBuffer] = useState<Report | null>(null);
   const [newMessage, setNewMessage] = useState('');
 
-  // フィルタリング用のステート
   const [filterMonth, setFilterMonth] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
 
   const getStudentName = (id: string) => students.find(s => s.id === id)?.name || '不明';
   const isPrivileged = currentUser.role === 'instructor' || currentUser.role === 'admin';
 
-  // 存在する「年月」の選択肢をデータから自動抽出
   const availableMonths = useMemo(() => {
     const relevantReports = (currentUser.role === 'admin' || currentUser.role === 'instructor')
       ? reports
       : reports.filter(r => r.studentId === currentUser.id);
 
-    const months = relevantReports.map(r => r.date.substring(0, 7)); // "YYYY-MM"
-    // Fix: Explicitly cast parameters to string to resolve "Property 'localeCompare' does not exist on type 'unknown'"
+    const months = relevantReports.map(r => r.date.substring(0, 7));
     return Array.from(new Set(months)).sort((a, b) => (b as string).localeCompare(a as string));
   }, [reports, currentUser]);
 
-  // 存在する「科目」の選択肢をデータから自動抽出
   const availableSubjects = useMemo(() => {
     const relevantReports = (currentUser.role === 'admin' || currentUser.role === 'instructor')
       ? reports
@@ -65,7 +60,6 @@ const ReportList: React.FC<ReportListProps> = ({
   const isFilterApplied = filterMonth !== '' || filterSubject !== '';
 
   const displayReports = useMemo(() => {
-    // フィルタ機能が無効な場合は全件表示、有効な場合はフィルタ条件に従う
     if (showFilters && !isFilterApplied) return [];
 
     let filtered = (currentUser.role === 'admin' || currentUser.role === 'instructor')
@@ -156,12 +150,11 @@ const ReportList: React.FC<ReportListProps> = ({
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h2 className="text-3xl font-black text-slate-900 tracking-tight">{title}</h2>
-            {showFilters && <p className="text-slate-500 font-semibold mt-1">年月または科目を選択して表示してください</p>}
+            {showFilters && <p className="text-slate-500 font-semibold mt-1">条件を選択して表示してください</p>}
           </div>
         </header>
       )}
 
-      {/* 検索・フィルターパネル - showFilters が true の場合のみ表示 */}
       {showFilters && (
         <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -170,7 +163,7 @@ const ReportList: React.FC<ReportListProps> = ({
               <select 
                 value={filterMonth}
                 onChange={(e) => setFilterMonth(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-50 bg-slate-50 focus:bg-white focus:border-indigo-500 outline-none font-bold text-sm transition-all"
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500 outline-none font-bold text-sm transition-all"
               >
                 <option value="">月を選択</option>
                 {availableMonths.map(ym => <option key={ym} value={ym}>{formatYearMonth(ym)}</option>)}
@@ -181,7 +174,7 @@ const ReportList: React.FC<ReportListProps> = ({
               <select 
                 value={filterSubject}
                 onChange={(e) => setFilterSubject(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border-2 border-slate-50 bg-slate-50 focus:bg-white focus:border-indigo-500 outline-none font-bold text-sm transition-all"
+                className="w-full px-4 py-3 rounded-xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-500 outline-none font-bold text-sm transition-all"
               >
                 <option value="">全ての科目</option>
                 {availableSubjects.map(sub => <option key={sub} value={sub}>{sub}</option>)}
@@ -197,7 +190,7 @@ const ReportList: React.FC<ReportListProps> = ({
                 onClick={() => { setFilterMonth(''); setFilterSubject(''); }}
                 className="text-[10px] font-black text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest"
               >
-                条件リセット ✕
+                リセット ✕
               </button>
             </div>
           )}
@@ -208,7 +201,6 @@ const ReportList: React.FC<ReportListProps> = ({
         <div className="py-24 flex flex-col items-center justify-center bg-white rounded-[3rem] border border-dashed border-slate-200 text-slate-400 shadow-sm">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl mb-6 grayscale opacity-30">📅</div>
           <p className="text-xl font-bold text-slate-600 mb-2">条件を選択してください</p>
-          <p className="text-sm">年月または科目を選択すると、報告書が表示されます。</p>
         </div>
       ) : displayReports.length === 0 ? (
         <div className="col-span-full py-24 text-center bg-white rounded-[3rem] border border-dashed border-slate-200 text-slate-400">
@@ -284,57 +276,42 @@ const ReportList: React.FC<ReportListProps> = ({
                 </div>
               </section>
 
-              {/* 宿題リストセクション */}
-              <section className="bg-indigo-50 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border border-indigo-100 shadow-sm">
+              <section className="bg-indigo-50/50 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border border-indigo-100 shadow-sm">
                  <h4 className="text-sm font-black text-indigo-600 mb-6 flex items-center gap-3">
-                   <span className="w-8 h-8 rounded-lg bg-white text-indigo-500 flex items-center justify-center text-base shadow-sm">📋</span>
+                   <span className="w-8 h-8 rounded-lg bg-white text-indigo-500 flex items-center justify-center text-base shadow-sm border border-indigo-100">📋</span>
                    今回の宿題タスク (To-Do)
                  </h4>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                    {selectedReport.generatedContent.homeworkList?.map((task, i) => (
                      <div key={i} className="flex items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-indigo-50 group hover:border-indigo-300 transition-all">
-                        <div className="w-5 h-5 rounded-md border-2 border-indigo-200 flex-shrink-0"></div>
+                        <div className="w-5 h-5 rounded-md border-2 border-indigo-100 flex-shrink-0"></div>
                         <span className="text-sm font-bold text-slate-700">{task}</span>
                      </div>
                    ))}
                  </div>
               </section>
 
-              {selectedReport.proposedSelfStudyDays && selectedReport.proposedSelfStudyDays.length > 0 && (
-                <section className="bg-amber-50 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-amber-200 shadow-sm flex items-center gap-6">
-                   <div className="w-12 h-12 rounded-2xl bg-white text-amber-500 flex items-center justify-center text-2xl shadow-sm border border-amber-100">🏫</div>
-                   <div>
-                     <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">講師からの自習来塾提案</h4>
-                     <div className="flex gap-2">
-                       {selectedReport.proposedSelfStudyDays.map(day => (
-                         <span key={day} className="bg-white text-slate-800 font-black px-4 py-1.5 rounded-xl border-2 border-amber-200 text-sm">{day}曜日</span>
-                       ))}
-                     </div>
-                   </div>
-                </section>
-              )}
-
-              {/* 日割りタイムラインセクション */}
-              <section className="bg-slate-900 text-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[3rem] shadow-2xl border border-white/10 relative overflow-hidden">
-                <h4 className="text-sm md:text-base font-black mb-8 flex items-center gap-4 relative z-10">
-                  <span className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-indigo-100 shadow-sm">📅</span>
+              {/* 日割りタイムライン：黒網掛けを廃止し、清潔な白×インディゴデザインへ */}
+              <section className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[3rem] shadow-sm border border-slate-100 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-600/20"></div>
+                <h4 className="text-sm md:text-base font-black text-slate-800 mb-8 flex items-center gap-4 relative z-10">
+                  <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm border border-indigo-100">📅</span>
                   7日間学習計画 (AI提案)
                 </h4>
                 <div className="relative z-10 space-y-0">
                   {selectedReport.generatedContent.weeklyPlan?.map((plan, idx) => (
                     <div key={idx} className="relative pl-10 pb-8 last:pb-2 group">
-                      <div className="absolute left-[3px] top-2 bottom-0 w-[2px] bg-white/10 group-last:hidden"></div>
-                      <div className="absolute left-[-4px] top-2 w-4 h-4 rounded-full bg-indigo-500 ring-4 ring-slate-900 shadow-lg"></div>
+                      <div className="absolute left-[3px] top-2 bottom-0 w-[2px] bg-slate-100 group-last:hidden"></div>
+                      <div className="absolute left-[-4px] top-2 w-4 h-4 rounded-full bg-indigo-500 ring-4 ring-white shadow-md"></div>
                       <div className="flex flex-col md:flex-row md:items-baseline md:gap-4">
-                        <span className="text-indigo-400 font-black text-[11px] uppercase tracking-widest shrink-0 whitespace-nowrap mb-1 md:mb-0">{plan.day}</span>
-                        <div className="bg-white/5 border border-white/5 rounded-xl px-5 py-3 flex-1">
-                          <span className="text-[14px] font-bold text-indigo-50 leading-relaxed">{plan.task}</span>
+                        <span className="text-indigo-600 font-black text-[11px] uppercase tracking-widest shrink-0 whitespace-nowrap mb-1 md:mb-0">{plan.day}</span>
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl px-5 py-3 flex-1 shadow-inner">
+                          <span className="text-[14px] font-bold text-slate-700 leading-relaxed">{plan.task}</span>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
               </section>
 
               <section className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm">
@@ -374,7 +351,7 @@ const ReportList: React.FC<ReportListProps> = ({
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="講師・保護者へ相談を入力..." className="flex-1 bg-white border-2 border-slate-100 rounded-xl px-5 py-3 text-sm text-slate-900 outline-none focus:border-indigo-500 font-bold shadow-sm transition-all" />
+                  <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="相談を入力..." className="flex-1 bg-white border-2 border-slate-200 rounded-xl px-5 py-3 text-sm text-slate-900 outline-none focus:border-indigo-500 font-bold shadow-sm transition-all" />
                   <button onClick={handleSendMessage} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm shadow-md hover:bg-indigo-700 transition-all active:scale-95">送信</button>
                 </div>
               </section>

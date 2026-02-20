@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Student, Report, MockExam, AdminConfig } from '../types';
 import { generateInterviewMaterial } from '../services/geminiService';
@@ -35,72 +36,130 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, repo
     }
   };
 
+  const inputStyle = "w-full px-6 py-4 rounded-2xl border-2 border-slate-200 bg-white text-slate-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/10 outline-none font-bold transition-all shadow-sm appearance-none";
+
   return (
-    <div className="space-y-8 animate-fadeIn pb-12">
+    <div className="space-y-8 animate-fadeIn pb-20">
       <header>
-        <h2 className="text-3xl font-black text-slate-800">面談資料AI生成</h2>
-        <p className="text-slate-500 font-medium">生徒の成績と指導履歴を統合解析し、三者面談用のプロフェッショナルな資料を作成します</p>
+        <h2 className="text-3xl font-black text-slate-800 tracking-tight">面談資料AI統合生成</h2>
+        <p className="text-slate-500 font-medium">生徒の成績と指導履歴を統合解析し、プロフェッショナルな面談を支援します</p>
       </header>
 
-      <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col md:flex-row items-center gap-6">
-        <div className="flex-1 w-full">
-          <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">対象生徒を選択</label>
-          <select value={selectedSid} onChange={e => setSelectedSid(e.target.value)} className="w-full px-5 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold">
-            <option value="">生徒を選択</option>
-            {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
-          </select>
+      {/* 入力エリアのクリーン化 */}
+      <div className="bg-white p-8 md:p-10 rounded-[3rem] border-2 border-slate-100 shadow-xl flex flex-col md:flex-row items-end gap-6">
+        <div className="flex-1 w-full relative">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-3 block">対象生徒を選択</label>
+          <div className="relative group">
+            <select value={selectedSid} onChange={e => setSelectedSid(e.target.value)} className={inputStyle}>
+              <option value="">生徒名を選択</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
+            </select>
+            <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-indigo-600">▼</div>
+          </div>
         </div>
-        <button onClick={handleGenerate} disabled={isGenerating || !selectedSid} className="w-full md:w-auto px-12 py-5 bg-indigo-600 text-white rounded-[2rem] font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95 disabled:bg-slate-200">
-          {isGenerating ? "生成中..." : "面談資料をAI生成 ✨"}
+        <button onClick={handleGenerate} disabled={isGenerating || !selectedSid} className="w-full md:w-auto px-12 py-5 bg-indigo-600 text-white rounded-[1.8rem] font-black shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none flex items-center justify-center gap-3">
+          {isGenerating ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              生成中...
+            </>
+          ) : (
+            <>面談資料をAI生成 ✨</>
+          )}
         </button>
       </div>
 
-      {material && (
+      {material ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-slideUp">
-           <div className="bg-white p-10 rounded-[3rem] border border-slate-100 space-y-8">
+           <div className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-xl space-y-10">
              <section>
-                <h4 className="text-sm font-black text-emerald-500 mb-4 flex items-center gap-2"><span>📈</span> 成長点と強み</h4>
-                <p className="text-slate-700 font-bold leading-relaxed">{material.growthPoints}</p>
+                <h4 className="text-[11px] font-black text-emerald-600 mb-5 flex items-center gap-3 tracking-widest uppercase">
+                  <span className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-lg">📈</span>
+                  成長点と強み
+                </h4>
+                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 shadow-inner">
+                   <p className="text-slate-800 font-bold leading-relaxed">{material.growthPoints}</p>
+                </div>
              </section>
+             
              <section>
-                <h4 className="text-sm font-black text-rose-500 mb-4 flex items-center gap-2"><span>⚠️</span> 現在の課題</h4>
-                <p className="text-slate-700 font-bold leading-relaxed">{material.challenges}</p>
+                <h4 className="text-[11px] font-black text-rose-500 mb-5 flex items-center gap-3 tracking-widest uppercase">
+                  <span className="w-8 h-8 rounded-xl bg-rose-50 flex items-center justify-center text-lg">⚠️</span>
+                  現在の課題
+                </h4>
+                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 shadow-inner">
+                   <p className="text-slate-800 font-bold leading-relaxed">{material.challenges}</p>
+                </div>
              </section>
-             <section className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100">
-                <h4 className="text-sm font-black text-indigo-600 mb-4">🏠 保護者様への具体的アドバイス</h4>
-                <p className="text-slate-800 font-bold italic leading-relaxed">「{material.parentAdvice}」</p>
+
+             <section className="bg-indigo-600 p-8 rounded-[3rem] shadow-xl text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
+                <h4 className="text-xs font-black text-indigo-200 mb-4 flex items-center gap-2 uppercase tracking-widest">🏠 保護者様への具体的アドバイス</h4>
+                <p className="text-white font-bold italic leading-relaxed text-lg drop-shadow-sm">「{material.parentAdvice}」</p>
              </section>
            </div>
 
            <div className="space-y-8">
-             <div className="bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
-               <h4 className="text-sm font-black text-indigo-300 uppercase tracking-widest mb-6">受験戦略・推奨校</h4>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                 <div>
-                   <p className="text-[10px] font-black text-slate-500 uppercase mb-2">公立 / 挑戦・安全</p>
-                   <p className="font-bold text-indigo-100">挑戦: {material.suggestedSchools.public.challenge.join(', ')}</p>
-                   <p className="font-bold text-indigo-300">適正: {material.suggestedSchools.public.realistic.join(', ')}</p>
+             {/* 黒網掛け（bg-slate-900）を廃止し、クリアなインディゴテーマへ */}
+             <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border-4 border-indigo-50 relative overflow-hidden">
+               <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
+               <h4 className="text-sm font-black text-indigo-600 uppercase tracking-widest mb-8 border-b border-indigo-50 pb-4 flex justify-between items-center">
+                 受験戦略・推奨校
+                 <span className="text-[10px] text-slate-400 font-bold tracking-normal italic">Powered by Data Analysis</span>
+               </h4>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 relative z-10">
+                 <div className="space-y-4">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>公立 / 第一志望・安全
+                   </p>
+                   <div className="space-y-2">
+                     <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                       <p className="text-[9px] font-black text-indigo-400 mb-0.5">CHALLENGE</p>
+                       <p className="font-black text-indigo-900">{material.suggestedSchools.public.challenge.join(' / ')}</p>
+                     </div>
+                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                       <p className="text-[9px] font-black text-slate-400 mb-0.5">REALISTIC</p>
+                       <p className="font-black text-slate-800">{material.suggestedSchools.public.realistic.join(' / ')}</p>
+                     </div>
+                   </div>
                  </div>
-                 <div>
-                   <p className="text-[10px] font-black text-slate-500 uppercase mb-2">私立 / 併願</p>
-                   <p className="font-bold text-indigo-100">挑戦: {material.suggestedSchools.private.challenge.join(', ')}</p>
-                   <p className="font-bold text-indigo-300">滑止: {material.suggestedSchools.private.solid.join(', ')}</p>
+                 <div className="space-y-4">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>私立 / 併願・滑り止め
+                   </p>
+                   <div className="space-y-2">
+                     <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
+                       <p className="text-[9px] font-black text-amber-500 mb-0.5">CHALLENGE</p>
+                       <p className="font-black text-amber-900">{material.suggestedSchools.private.challenge.join(' / ')}</p>
+                     </div>
+                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                       <p className="text-[9px] font-black text-slate-400 mb-0.5">STABLE</p>
+                       <p className="font-black text-slate-800">{material.suggestedSchools.private.solid.join(' / ')}</p>
+                     </div>
+                   </div>
                  </div>
                </div>
              </div>
 
-             <div className="bg-white p-8 rounded-[3rem] border border-slate-100">
-                <h4 className="text-sm font-black text-slate-800 mb-4">推奨学習時間 (週間合計: {material.requiredStudyHours.totalWeekly}h)</h4>
-                <div className="space-y-3">
+             <div className="bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-xl">
+                <h4 className="text-sm font-black text-slate-800 mb-8 border-b border-slate-50 pb-4">推奨学習時間 (週間合計: <span className="text-indigo-600 text-xl">{material.requiredStudyHours.totalWeekly}h</span>)</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {material.requiredStudyHours.subjectBreakdown.map((s: any, i: number) => (
-                    <div key={i} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl">
-                      <span className="font-black text-slate-700">{s.subject}</span>
-                      <span className="font-black text-indigo-600">{s.hours}時間</span>
+                    <div key={i} className="flex justify-between items-center bg-slate-50 p-5 rounded-2xl border border-slate-100 group hover:border-indigo-300 transition-all">
+                      <span className="font-black text-slate-700 text-sm">{s.subject}</span>
+                      <span className="font-black text-indigo-600 text-lg group-hover:scale-110 transition-transform">{s.hours}<span className="text-xs ml-1">時間</span></span>
                     </div>
                   ))}
                 </div>
+                <p className="mt-8 text-[11px] font-bold text-slate-400 leading-relaxed italic text-center">※ AI分析に基づき、現在の実力と志望校のギャップから算出しています</p>
              </div>
            </div>
+        </div>
+      ) : (
+        <div className="py-32 flex flex-col items-center justify-center bg-white rounded-[3.5rem] border border-dashed border-slate-200 text-slate-300 shadow-sm animate-fadeIn">
+          <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-5xl mb-8 grayscale opacity-20">📊</div>
+          <p className="text-2xl font-black text-slate-400 mb-2">生徒を選択して解析を開始してください</p>
+          <p className="text-sm font-bold text-slate-300">模試データと指導報告書から面談シナリオを自動生成します</p>
         </div>
       )}
     </div>

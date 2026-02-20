@@ -77,12 +77,6 @@ const App: React.FC = () => {
     }
 
     try {
-      if (!isSilent) {
-        // バックエンドが遅い場合でも、モックデータを初期表示してフリーズを回避
-        setStudents(MOCK_STUDENTS);
-        setInstructors(MOCK_INSTRUCTORS);
-      }
-
       const [
         { data: adminData },
         { data: studentData },
@@ -108,8 +102,6 @@ const App: React.FC = () => {
       }));
       setInstructors(latestInstructors.length > 0 ? latestInstructors : MOCK_INSTRUCTORS);
       
-      const validInstructorIds = new Set(latestInstructors.map(i => i.id));
-
       if (studentData && studentData.length > 0) {
         setStudents(studentData.map(s => ({
           id: s.id, name: s.name, grade: s.grade, 
@@ -123,6 +115,8 @@ const App: React.FC = () => {
           wordKingBest: s.word_king_best || s.wordKingBest || 0,
           targets: s.targets || undefined
         })));
+      } else {
+        setStudents(MOCK_STUDENTS);
       }
 
       if (adminData) {
@@ -148,7 +142,7 @@ const App: React.FC = () => {
         generatedContent: r.generated_content || r.generatedContent, 
         quizScore: r.quiz_score || r.quizScore, messages: r.messages || [], 
         needsAction: r.needs_action || r.needsAction || false
-      })));
+      }))); else setReports(MOCK_REPORTS);
 
       if (mockData) setMockExams(mockData.map(m => ({ 
         id: m.id, studentId: m.student_id || m.studentId, examName: m.exam_name || m.examName, 
@@ -161,6 +155,8 @@ const App: React.FC = () => {
           endTime: t.end_time || t.endTime, subject: t.subject, studentId: t.student_id || t.studentId, 
           instructorId: t.instructor_id || t.instructorId, room: t.room 
         })));
+      } else {
+        setTimetable(MOCK_TIMETABLE);
       }
 
       if (sessionData) setAllSessions(sessionData.map(s => ({ 
@@ -168,26 +164,27 @@ const App: React.FC = () => {
       })));
 
     } catch (err) {
-      console.warn("Initial background sync failed, using local/mock state.", err);
+      console.warn("Initial sync jitter, falling back to local.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // 初期読み込み: 5秒経過してもisLoadingがtrueなら強制解除するセーフティネット
+  // 初期化フリーズ回避用のタイムアウト設定
   useEffect(() => {
     fetchAllData();
-    const safetyTimer = setTimeout(() => { setIsLoading(false); }, 5000);
-    return () => clearTimeout(safetyTimer);
+    const safetyNet = setTimeout(() => {
+      setIsLoading(false);
+    }, 3000); // 3秒で強制的にローディング解除
+    return () => clearTimeout(safetyNet);
   }, [fetchAllData]);
 
-  // 認証後の同期処理
   useEffect(() => { 
     if (!isAuthenticated) return;
     
     let channel: any;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase.channel('db-integrity-v3.0.2')
+      channel = supabase.channel('db-sync-v3.1.1')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
           if (!isUpdatingRef.current) fetchAllData(true);
         })
@@ -198,19 +195,9 @@ const App: React.FC = () => {
       if (!isUpdatingRef.current) fetchAllData(true);
     }, 15000); 
 
-    const handleSyncOnVisibility = () => {
-      if (!isUpdatingRef.current && (document.visibilityState === 'visible' || document.hasFocus())) {
-        fetchAllData(true);
-      }
-    };
-    document.addEventListener('visibilitychange', handleSyncOnVisibility);
-    window.addEventListener('focus', handleSyncOnVisibility);
-
     return () => {
       if (channel) supabase.removeChannel(channel);
       clearInterval(syncTimer);
-      document.removeEventListener('visibilitychange', handleSyncOnVisibility);
-      window.removeEventListener('focus', handleSyncOnVisibility);
     };
   }, [fetchAllData, isAuthenticated]);
 
@@ -270,7 +257,6 @@ const App: React.FC = () => {
           location: latestConfig.location, word_king_record: latestConfig.wordKingClassroomRecord,
           word_king_holder: latestConfig.wordKingClassroomHolder
         }).eq('id', 1);
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -294,7 +280,6 @@ const App: React.FC = () => {
         if (updates.instructorIds !== undefined) dbUpdates.instructor_ids = updates.instructorIds;
         if (Object.keys(dbUpdates).length > 0) {
           await supabase.from('students').update(dbUpdates).eq('id', id);
-          await fetchAllData(true);
         }
       }
     } finally { endUpdate(); }
@@ -382,7 +367,6 @@ const App: React.FC = () => {
         
         if (Object.keys(dbUpdates).length > 0) {
           await supabase.from('reports').update(dbUpdates).eq('id', reportId);
-          await fetchAllData(true);
         }
       }
     } finally { endUpdate(); }
@@ -391,48 +375,40 @@ const App: React.FC = () => {
   const handleAddReportMessage = async (reportId: string, text: string) => {
     startUpdate();
     try {
-      let currentMessages: ReportMessage[] = [];
-      let currentNeedsAction = false;
-      if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from('reports').select('messages, needs_action').eq('id', reportId).maybeSingle();
-        if (data) {
-          currentMessages = data.messages || [];
-          currentNeedsAction = data.needs_action || false;
-        }
-      }
+      const report = reports.find(r => r.id === reportId);
+      const currentMessages = report?.messages || [];
       const newMessage: ReportMessage = { 
         id: generateUniqueId('msg'), senderId: currentUser.id, senderName: currentUser.name, senderRole: currentUser.role, 
         text, timestamp: new Date().toLocaleTimeString('ja-JP') 
       };
       const updatedMessages = [...currentMessages, newMessage];
       const shouldNeedAction = currentUser.role === 'student' || currentUser.role === 'parent';
-      await handleUpdateReport(reportId, { messages: updatedMessages, needsAction: shouldNeedAction ? true : currentNeedsAction });
+      await handleUpdateReport(reportId, { messages: updatedMessages, needsAction: shouldNeedAction ? true : report?.needsAction });
     } finally { endUpdate(); }
   };
 
   const handleDeleteReportMessage = async (reportId: string, messageId: string) => {
     startUpdate();
     try {
-      let currentMessages: ReportMessage[] = [];
-      if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from('reports').select('messages').eq('id', reportId).maybeSingle();
-        if (data) currentMessages = data.messages || [];
+      const report = reports.find(r => r.id === reportId);
+      if (report) {
+        const updatedMessages = (report.messages || []).filter(m => m.id !== messageId);
+        await handleUpdateReport(reportId, { messages: updatedMessages });
       }
-      await handleUpdateReport(reportId, { messages: currentMessages.filter(m => m.id !== messageId) });
     } finally { endUpdate(); }
   };
 
   const handleUpdateTimetable = async (newTimetable: TimetableEntry[]) => {
     startUpdate();
     try {
+      setTimetable(newTimetable);
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('timetable').delete().neq('id', 'temp_id_flush_preventer');
+        await supabase.from('timetable').delete().neq('id', 'flush_prevent');
         const insertData = newTimetable.map(t => ({
           id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
           subject: t.subject, student_id: t.studentId, instructor_id: t.instructorId, room: t.room
         }));
         if (insertData.length > 0) await supabase.from('timetable').insert(insertData);
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -453,6 +429,7 @@ const App: React.FC = () => {
   const handleUpdateInstructor = async (id: string, upd: Partial<Instructor>) => {
     startUpdate();
     try {
+      setInstructors(prev => prev.map(i => i.id === id ? { ...i, ...upd } : i));
       if (isSupabaseConfigured && supabase) {
         const dbUpd: any = {};
         if (upd.name) dbUpd.name = upd.name;
@@ -460,7 +437,6 @@ const App: React.FC = () => {
         if (upd.loginId) dbUpd.login_id = upd.loginId;
         if (upd.password) dbUpd.password = upd.password;
         await supabase.from('instructors').update(dbUpd).eq('id', id);
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -482,11 +458,11 @@ const App: React.FC = () => {
   const handleAddMockExam = async (e: MockExam) => {
     startUpdate();
     try {
+      setMockExams(prev => [...prev, e]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').insert({ 
           id: e.id, student_id: e.studentId, exam_name: e.examName, exam_date: e.examDate, scores: e.scores 
         });
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -494,11 +470,11 @@ const App: React.FC = () => {
   const handleUpdateMockExam = async (e: MockExam) => {
     startUpdate();
     try {
+      setMockExams(prev => prev.map(m => m.id === e.id ? e : m));
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').update({ 
           exam_name: e.examName, exam_date: e.examDate, scores: e.scores 
         }).eq('id', e.id);
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -506,9 +482,9 @@ const App: React.FC = () => {
   const handleDeleteMockExam = async (id: string) => {
     startUpdate();
     try {
+      setMockExams(prev => prev.filter(m => m.id !== id));
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').delete().eq('id', id);
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -517,15 +493,11 @@ const App: React.FC = () => {
     if (currentUser.role !== 'student') return;
     startUpdate();
     try {
-      let latestHistory: IQResult[] = [];
-      if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from('students').select('iq_history').eq('id', currentUser.id).maybeSingle();
-        if (data) latestHistory = data.iq_history || [];
-      }
+      const activeStudent = students.find(s => s.id === currentUser.id);
       const newIQ: IQResult = {
         id: generateUniqueId('iq'), date: getLocalISOString(), score, estimatedIQ: Math.round(100 + (score - 50) * 0.8), breakdown, aiAnalysis: analysis
       };
-      await handleUpdateStudent(currentUser.id, { iqHistory: [newIQ, ...latestHistory] });
+      await handleUpdateStudent(currentUser.id, { iqHistory: [newIQ, ...(activeStudent?.iqHistory || [])] });
     } finally { endUpdate(); }
   };
 
@@ -533,12 +505,10 @@ const App: React.FC = () => {
     if (currentUser.role !== 'student') return;
     startUpdate();
     try {
-      let currentBest = 0;
-      if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from('students').select('word_king_best').eq('id', currentUser.id).maybeSingle();
-        if (data) currentBest = data.word_king_best || 0;
+      const activeStudent = students.find(s => s.id === currentUser.id);
+      if (newScore > (activeStudent?.wordKingBest || 0)) {
+        await handleUpdateStudent(currentUser.id, { wordKingBest: newScore });
       }
-      if (newScore > currentBest) await handleUpdateStudent(currentUser.id, { wordKingBest: newScore });
     } finally { endUpdate(); }
   };
 
@@ -553,19 +523,11 @@ const App: React.FC = () => {
       case 'interview': return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
       case 'students': return <StudentCenter students={students} reports={reports} allSessions={allSessions} instructors={instructors} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
       case 'instructors': return <InstructorCenter instructors={instructors} students={students} onAssignStudent={async (sid, iid) => {
-          let currentIds: string[] = [];
-          if (isSupabaseConfigured && supabase) {
-            const { data } = await supabase.from('students').select('instructor_ids').eq('id', sid).maybeSingle();
-            if (data) currentIds = data.instructor_ids || [];
-          }
-          await handleUpdateStudent(sid, { instructorIds: Array.from(new Set([...currentIds, iid])) });
+          const s = students.find(std => std.id === sid);
+          await handleUpdateStudent(sid, { instructorIds: Array.from(new Set([...(s?.instructorIds || []), iid])) });
         }} onRemoveStudent={async (sid, iid) => {
-          let currentIds: string[] = [];
-          if (isSupabaseConfigured && supabase) {
-            const { data } = await supabase.from('students').select('instructor_ids').eq('id', sid).maybeSingle();
-            if (data) currentIds = data.instructor_ids || [];
-          }
-          await handleUpdateStudent(sid, { instructorIds: currentIds.filter(id => id !== iid) });
+          const s = students.find(std => std.id === sid);
+          await handleUpdateStudent(sid, { instructorIds: (s?.instructorIds || []).filter(id => id !== iid) });
         }} onUpdateInstructor={handleUpdateInstructor} onAddInstructor={handleAddInstructor} onDeleteInstructor={handleDeleteInstructor} />;
       case 'salary': return <SalaryCenter instructors={instructors} reports={reports} />;
       case 'mock': return <MockExamCenter students={students} mockExams={mockExams} role={currentUser.role} currentUserId={currentUser.id} onSave={handleAddMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />;
@@ -595,7 +557,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.0.2</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.1.1</p>
       </div>
     </div>
   );
