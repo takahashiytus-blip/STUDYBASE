@@ -64,17 +64,12 @@ const App: React.FC = () => {
         const localReports = localStorage.getItem('sb_data_reports');
         const localStudents = localStorage.getItem('sb_data_students');
         const localInstructors = localStorage.getItem('sb_data_instructors');
-        const localTimetable = localStorage.getItem('sb_data_timetable');
-        const localMockExams = localStorage.getItem('sb_data_mockExams');
-        const localSessions = localStorage.getItem('sb_data_sessions');
         const savedAdmin = localStorage.getItem('study_base_admin_config');
 
         setReports(localReports ? JSON.parse(localReports) : MOCK_REPORTS);
         setStudents(localStudents ? JSON.parse(localStudents) : MOCK_STUDENTS);
         setInstructors(localInstructors ? JSON.parse(localInstructors) : MOCK_INSTRUCTORS);
-        setTimetable(localTimetable ? JSON.parse(localTimetable) : MOCK_TIMETABLE);
-        setMockExams(localMockExams ? JSON.parse(localMockExams) : []);
-        setAllSessions(localSessions ? JSON.parse(localSessions) : []);
+        setTimetable(MOCK_TIMETABLE);
         if (savedAdmin) setAdminConfig(JSON.parse(savedAdmin));
         setIsLoading(false);
       }
@@ -82,8 +77,12 @@ const App: React.FC = () => {
     }
 
     try {
-      if (!isSilent) setIsLoading(true);
-      
+      if (!isSilent) {
+        // バックエンドが遅い場合でも、モックデータを初期表示してフリーズを回避
+        setStudents(MOCK_STUDENTS);
+        setInstructors(MOCK_INSTRUCTORS);
+      }
+
       const [
         { data: adminData },
         { data: studentData },
@@ -107,110 +106,88 @@ const App: React.FC = () => {
         loginId: i.loginId || i.login_id, 
         password: i.password 
       }));
-      setInstructors(latestInstructors);
+      setInstructors(latestInstructors.length > 0 ? latestInstructors : MOCK_INSTRUCTORS);
       
       const validInstructorIds = new Set(latestInstructors.map(i => i.id));
 
-      if (studentData) {
-        setStudents(studentData.map(s => {
-          const rawIds = s.instructorIds || s.instructor_ids || [];
-          const cleanedIds = Array.isArray(rawIds) ? rawIds.filter((id: string) => validInstructorIds.has(id)) : [];
-          
-          return {
-            id: s.id, name: s.name, grade: s.grade, 
-            loginId: s.loginId || s.login_id, 
-            password: s.password,
-            targetSchool: s.targetSchool || s.target_school, 
-            targetFaculty: s.targetFaculty || s.target_faculty,
-            weeklyInstructorMessage: s.weeklyInstructorMessage || s.weekly_instructor_message, 
-            instructorIds: cleanedIds,
-            iqHistory: s.iqHistory || s.iq_history || [],
-            wordKingBest: s.wordKingBest || s.word_king_best || 0,
-            targets: s.targets || undefined
-          };
-        }));
+      if (studentData && studentData.length > 0) {
+        setStudents(studentData.map(s => ({
+          id: s.id, name: s.name, grade: s.grade, 
+          loginId: s.loginId || s.login_id, 
+          password: s.password,
+          targetSchool: s.targetSchool || s.target_school, 
+          targetFaculty: s.targetFaculty || s.target_faculty,
+          weeklyInstructorMessage: s.weeklyInstructorMessage || s.weekly_instructor_message, 
+          instructorIds: Array.isArray(s.instructor_ids) ? s.instructor_ids : (s.instructorIds || []),
+          iqHistory: s.iq_history || s.iqHistory || [],
+          wordKingBest: s.word_king_best || s.wordKingBest || 0,
+          targets: s.targets || undefined
+        })));
       }
 
       if (adminData) {
         setAdminConfig({
           id: adminData.id, 
           name: adminData.name, 
-          loginId: adminData.loginId || adminData.login_id,
-          passwordHash: adminData.passwordHash || adminData.password_hash || DEFAULT_ADMIN.passwordHash,
+          loginId: adminData.login_id || adminData.loginId,
+          passwordHash: adminData.password_hash || adminData.passwordHash || DEFAULT_ADMIN.passwordHash,
           location: adminData.location, 
-          wordKingClassroomRecord: adminData.wordKingClassroomRecord ?? adminData.word_king_record ?? 0,
-          wordKingClassroomHolder: adminData.wordKingClassroomHolder || adminData.word_king_holder || '---'
+          wordKingClassroomRecord: adminData.word_king_record ?? adminData.wordKingClassroomRecord ?? 0,
+          wordKingClassroomHolder: adminData.word_king_holder || adminData.wordKingClassroomHolder || '---'
         });
       }
 
       if (reportData) setReports(reportData.map(r => ({
-        id: r.id, 
-        studentId: r.studentId || r.student_id, 
-        date: r.date, 
-        subject: r.subject, 
-        instructorName: r.instructorName || r.instructor_name,
-        sessionYear: r.sessionYear || r.session_year, 
-        sessionMonth: r.sessionMonth || r.session_month, 
-        sessionCount: r.sessionCount || r.session_count,
-        attendanceStatus: r.attendanceStatus || r.attendance_status,
-        rawNotes: r.rawNotes || r.raw_notes, 
-        homeworkAssigned: r.homeworkAssigned || r.homework_assigned,
-        homeworkCompletion: r.homeworkCompletion || r.homework_completion, 
-        proposedSelfStudyDays: r.proposedSelfStudyDays || r.proposed_self_study_days,
-        generatedContent: r.generatedContent || r.generated_content, 
-        quizScore: r.quizScore || r.quiz_score, 
-        messages: r.messages || [], 
-        needsAction: r.needsAction || r.needs_action || false
+        id: r.id, studentId: r.student_id || r.studentId, date: r.date, subject: r.subject, 
+        instructorName: r.instructor_name || r.instructorName,
+        sessionYear: r.session_year || r.sessionYear, sessionMonth: r.session_month || r.sessionMonth, sessionCount: r.session_count || r.sessionCount,
+        attendanceStatus: r.attendance_status || r.attendanceStatus,
+        rawNotes: r.raw_notes || r.rawNotes, homeworkAssigned: r.homework_assigned || r.homeworkAssigned,
+        homeworkCompletion: r.homework_completion || r.homeworkCompletion, 
+        proposedSelfStudyDays: r.proposed_self_study_days || r.proposedSelfStudyDays,
+        generatedContent: r.generated_content || r.generatedContent, 
+        quizScore: r.quiz_score || r.quizScore, messages: r.messages || [], 
+        needsAction: r.needs_action || r.needsAction || false
       })));
 
       if (mockData) setMockExams(mockData.map(m => ({ 
-        id: m.id, 
-        studentId: m.studentId || m.student_id, 
-        examName: m.examName || m.exam_name, 
-        examDate: m.examDate || m.exam_date,
-        scores: m.scores || {} 
+        id: m.id, studentId: m.student_id || m.studentId, examName: m.exam_name || m.examName, 
+        examDate: m.exam_date || m.examDate, scores: m.scores || {} 
       })));
 
       if (timetableData) {
         setTimetable(timetableData.map(t => ({ 
-          id: t.id, 
-          dayOfWeek: t.dayOfWeek || t.day_of_week, 
-          startTime: t.startTime || t.start_time, 
-          endTime: t.endTime || t.end_time, 
-          subject: t.subject, 
-          studentId: t.studentId || t.student_id, 
-          instructorId: t.instructorId || t.instructor_id, 
-          room: t.room 
-        })).filter(t => !t.instructorId || validInstructorIds.has(t.instructorId)));
+          id: t.id, dayOfWeek: t.day_of_week || t.dayOfWeek, startTime: t.start_time || t.startTime, 
+          endTime: t.end_time || t.endTime, subject: t.subject, studentId: t.student_id || t.studentId, 
+          instructorId: t.instructor_id || t.instructorId, room: t.room 
+        })));
       }
 
       if (sessionData) setAllSessions(sessionData.map(s => ({ 
-        id: s.id, 
-        studentId: s.studentId || s.student_id, 
-        date: s.date, 
-        subject: s.subject, 
-        minutes: s.minutes 
+        id: s.id, studentId: s.student_id || s.studentId, date: s.date, subject: s.subject, minutes: s.minutes 
       })));
 
     } catch (err) {
-      console.error("Critical Sync Error:", err);
+      console.warn("Initial background sync failed, using local/mock state.", err);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // 1. 初期データ読み込み（認証に関わらず実行し、ログイン情報を取得する）
+  // 初期読み込み: 5秒経過してもisLoadingがtrueなら強制解除するセーフティネット
   useEffect(() => {
     fetchAllData();
+    const safetyTimer = setTimeout(() => { setIsLoading(false); }, 5000);
+    return () => clearTimeout(safetyTimer);
   }, [fetchAllData]);
 
-  // 2. 認証後の同期処理
+  // 認証後の同期処理
   useEffect(() => { 
     if (!isAuthenticated) return;
     
     let channel: any;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase.channel('db-integrity-final-v3.0.1')
+      channel = supabase.channel('db-integrity-v3.0.2')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
           if (!isUpdatingRef.current) fetchAllData(true);
         })
@@ -289,11 +266,8 @@ const App: React.FC = () => {
       setAdminConfig(latestConfig);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('admin_config').update({
-          name: latestConfig.name, 
-          login_id: latestConfig.loginId, 
-          password_hash: latestConfig.passwordHash,
-          location: latestConfig.location, 
-          word_king_record: latestConfig.wordKingClassroomRecord,
+          name: latestConfig.name, login_id: latestConfig.loginId, password_hash: latestConfig.passwordHash,
+          location: latestConfig.location, word_king_record: latestConfig.wordKingClassroomRecord,
           word_king_holder: latestConfig.wordKingClassroomHolder
         }).eq('id', 1);
         await fetchAllData(true);
@@ -332,13 +306,8 @@ const App: React.FC = () => {
       const id = generateUniqueId('s');
       if (isSupabaseConfigured && supabase) {
         await supabase.from('students').insert({ 
-          id, 
-          name: d.name, 
-          grade: d.grade, 
-          login_id: d.loginId, 
-          password: d.password, 
-          target_school: d.targetSchool, 
-          target_faculty: d.targetFaculty 
+          id, name: d.name, grade: d.grade, login_id: d.loginId, password: d.password, 
+          target_school: d.targetSchool, target_faculty: d.targetFaculty 
         });
         await fetchAllData(true);
       }
@@ -364,11 +333,7 @@ const App: React.FC = () => {
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('study_sessions').insert({
-          id: session.id, 
-          student_id: session.studentId, 
-          date: session.date,
-          subject: session.subject, 
-          minutes: session.minutes
+          id: session.id, student_id: session.studentId, date: session.date, subject: session.subject, minutes: session.minutes
         });
         await fetchAllData(true);
       }
@@ -380,22 +345,11 @@ const App: React.FC = () => {
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('reports').insert({
-          id: report.id, 
-          student_id: report.studentId, 
-          date: report.date, 
-          subject: report.subject, 
-          instructor_name: report.instructorName,
-          session_year: report.sessionYear, 
-          session_month: report.sessionMonth, 
-          session_count: report.sessionCount,
-          attendance_status: report.attendanceStatus, 
-          raw_notes: report.rawNotes, 
-          homework_assigned: report.homeworkAssigned,
-          homework_completion: report.homeworkCompletion, 
-          proposed_self_study_days: report.proposedSelfStudyDays,
-          generated_content: report.generatedContent, 
-          quiz_score: report.quizScore, 
-          messages: report.messages || [], 
+          id: report.id, student_id: report.studentId, date: report.date, subject: report.subject, instructor_name: report.instructorName,
+          session_year: report.sessionYear, session_month: report.sessionMonth, session_count: report.sessionCount,
+          attendance_status: report.attendanceStatus, raw_notes: report.rawNotes, homework_assigned: report.homeworkAssigned,
+          homework_completion: report.homeworkCompletion, proposed_self_study_days: report.proposedSelfStudyDays,
+          generated_content: report.generatedContent, quiz_score: report.quizScore, messages: report.messages || [], 
           needs_action: report.needsAction || false
         });
         await fetchAllData(true);
@@ -474,14 +428,8 @@ const App: React.FC = () => {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('timetable').delete().neq('id', 'temp_id_flush_preventer');
         const insertData = newTimetable.map(t => ({
-          id: t.id, 
-          day_of_week: t.dayOfWeek, 
-          start_time: t.startTime, 
-          end_time: t.endTime,
-          subject: t.subject, 
-          student_id: t.studentId, 
-          instructor_id: t.instructorId, 
-          room: t.room
+          id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
+          subject: t.subject, student_id: t.studentId, instructor_id: t.instructorId, room: t.room
         }));
         if (insertData.length > 0) await supabase.from('timetable').insert(insertData);
         await fetchAllData(true);
@@ -495,11 +443,7 @@ const App: React.FC = () => {
       const id = generateUniqueId('i');
       if (isSupabaseConfigured && supabase) {
         await supabase.from('instructors').insert({ 
-          id, 
-          name: d.name, 
-          specialty: d.specialty, 
-          login_id: d.loginId, 
-          password: d.password 
+          id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password 
         });
         await fetchAllData(true);
       }
@@ -525,21 +469,11 @@ const App: React.FC = () => {
     startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
-        const { data: latestStudents } = await supabase.from('students').select('id, instructor_ids');
-        const studentUpdates = (latestStudents || [])
-          .filter(s => (s.instructor_ids || []).includes(id))
-          .map(s => {
-            const newIds = (s.instructor_ids || []).filter((iid: string) => iid !== id);
-            return supabase.from('students').update({ instructor_ids: newIds }).eq('id', s.id);
-          });
-        
         await Promise.all([
           supabase.from('instructors').delete().eq('id', id),
           supabase.from('timetable').delete().eq('instructor_id', id),
-          supabase.from('report_drafts').delete().eq('instructor_id', id),
-          ...studentUpdates
+          supabase.from('report_drafts').delete().eq('instructor_id', id)
         ]);
-
         await fetchAllData(true);
       }
     } finally { endUpdate(); }
@@ -550,11 +484,7 @@ const App: React.FC = () => {
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').insert({ 
-          id: e.id, 
-          student_id: e.studentId, 
-          exam_name: e.examName, 
-          exam_date: e.examDate, 
-          scores: e.scores 
+          id: e.id, student_id: e.studentId, exam_name: e.examName, exam_date: e.examDate, scores: e.scores 
         });
         await fetchAllData(true);
       }
@@ -566,9 +496,7 @@ const App: React.FC = () => {
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').update({ 
-          exam_name: e.examName, 
-          exam_date: e.examDate, 
-          scores: e.scores 
+          exam_name: e.examName, exam_date: e.examDate, scores: e.scores 
         }).eq('id', e.id);
         await fetchAllData(true);
       }
@@ -667,7 +595,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.0.1</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.0.2</p>
       </div>
     </div>
   );
