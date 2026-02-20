@@ -95,7 +95,11 @@ const App: React.FC = () => {
         supabase.from('study_sessions').select('*')
       ]);
 
-      const latestInstructors = (instructorData || []).map(i => ({ 
+      // 1. 最新の有効なマスターIDセットを作成（同期不整合の検知用）
+      const validInstructorIds = new Set((instructorData || []).map(i => i.id));
+      const validStudentIds = new Set((studentData || []).map(s => s.id));
+
+      const latestInstructors: Instructor[] = (instructorData || []).map(i => ({ 
         id: i.id, name: i.name, specialty: i.specialty, 
         loginId: i.loginId || i.login_id, 
         password: i.password 
@@ -103,18 +107,24 @@ const App: React.FC = () => {
       setInstructors(latestInstructors.length > 0 ? latestInstructors : MOCK_INSTRUCTORS);
       
       if (studentData && studentData.length > 0) {
-        setStudents(studentData.map(s => ({
-          id: s.id, name: s.name, grade: s.grade, 
-          loginId: s.loginId || s.login_id, 
-          password: s.password,
-          targetSchool: s.targetSchool || s.target_school, 
-          targetFaculty: s.targetFaculty || s.target_faculty,
-          weeklyInstructorMessage: s.weeklyInstructorMessage || s.weekly_instructor_message, 
-          instructorIds: Array.isArray(s.instructor_ids) ? s.instructor_ids : (s.instructorIds || []),
-          iqHistory: s.iq_history || s.iqHistory || [],
-          wordKingBest: s.word_king_best || s.wordKingBest || 0,
-          targets: s.targets || undefined
-        })));
+        setStudents(studentData.map(s => {
+          // サニタイズ：存在しない講師IDを配列から自動排除（同期不備の最終防衛ライン）
+          const rawIds = Array.isArray(s.instructor_ids) ? s.instructor_ids : (s.instructorIds || []);
+          const cleanInstructorIds = rawIds.filter((id: string) => validInstructorIds.has(id));
+
+          return {
+            id: s.id, name: s.name, grade: s.grade, 
+            loginId: s.loginId || s.login_id, 
+            password: s.password,
+            targetSchool: s.targetSchool || s.target_school, 
+            targetFaculty: s.targetFaculty || s.target_faculty,
+            weeklyInstructorMessage: s.weeklyInstructorMessage || s.weekly_instructor_message, 
+            instructorIds: cleanInstructorIds,
+            iqHistory: s.iq_history || s.iqHistory || [],
+            wordKingBest: s.word_king_best || s.wordKingBest || 0,
+            targets: s.targets || undefined
+          };
+        }));
       } else {
         setStudents(MOCK_STUDENTS);
       }
@@ -131,40 +141,64 @@ const App: React.FC = () => {
         });
       }
 
-      if (reportData) setReports(reportData.map(r => ({
-        id: r.id, studentId: r.student_id || r.studentId, date: r.date, subject: r.subject, 
-        instructorName: r.instructor_name || r.instructorName,
-        sessionYear: r.session_year || r.sessionYear, sessionMonth: r.session_month || r.sessionMonth, sessionCount: r.session_count || r.sessionCount,
-        attendanceStatus: r.attendance_status || r.attendanceStatus,
-        rawNotes: r.raw_notes || r.rawNotes, homeworkAssigned: r.homework_assigned || r.homeworkAssigned,
-        homeworkCompletion: r.homework_completion || r.homeworkCompletion, 
-        proposedSelfStudyDays: r.proposed_self_study_days || r.proposedSelfStudyDays,
-        generatedContent: r.generated_content || r.generatedContent, 
-        quizScore: r.quiz_score || r.quizScore, messages: r.messages || [], 
-        needsAction: r.needs_action || r.needsAction || false
-      }))); else setReports(MOCK_REPORTS);
+      if (reportData) {
+        // サニタイズ：存在しない生徒の報告書は表示しない
+        setReports(reportData
+          .filter(r => validStudentIds.has(r.student_id || r.studentId))
+          .map(r => ({
+            id: r.id, studentId: r.student_id || r.studentId, date: r.date, subject: r.subject, 
+            instructorName: r.instructor_name || r.instructorName,
+            sessionYear: r.session_year || r.sessionYear, sessionMonth: r.session_month || r.sessionMonth, sessionCount: r.session_count || r.sessionCount,
+            attendanceStatus: r.attendance_status || r.attendanceStatus,
+            rawNotes: r.raw_notes || r.rawNotes, homework_assigned: r.homework_assigned || r.homeworkAssigned,
+            homeworkCompletion: r.homework_completion || r.homeworkCompletion, 
+            proposedSelfStudyDays: r.proposed_self_study_days || r.proposedSelfStudyDays,
+            generatedContent: r.generated_content || r.generatedContent, 
+            quizScore: r.quiz_score || r.quizScore, messages: r.messages || [], 
+            needsAction: r.needs_action || r.needsAction || false
+          }))
+        );
+      } else {
+        setReports(MOCK_REPORTS);
+      }
 
-      if (mockData) setMockExams(mockData.map(m => ({ 
-        id: m.id, studentId: m.student_id || m.studentId, examName: m.exam_name || m.examName, 
-        examDate: m.exam_date || m.examDate, scores: m.scores || {} 
-      })));
+      if (mockData) {
+        // サニタイズ：存在しない生徒の成績は排除
+        setMockExams(mockData
+          .filter(m => validStudentIds.has(m.student_id || m.studentId))
+          .map(m => ({ 
+            id: m.id, studentId: m.student_id || m.studentId, examName: m.exam_name || m.examName, 
+            examDate: m.exam_date || m.examDate, scores: m.scores || {} 
+          }))
+        );
+      }
 
       if (timetableData) {
-        setTimetable(timetableData.map(t => ({ 
-          id: t.id, dayOfWeek: t.day_of_week || t.dayOfWeek, startTime: t.start_time || t.startTime, 
-          endTime: t.end_time || t.endTime, subject: t.subject, studentId: t.student_id || t.studentId, 
-          instructorId: t.instructor_id || t.instructorId, room: t.room 
-        })));
+        // サニタイズ：生徒または講師が削除されている枠は非表示にする
+        setTimetable(timetableData
+          .filter(t => validStudentIds.has(t.student_id || t.studentId) && validInstructorIds.has(t.instructor_id || t.instructorId))
+          .map(t => ({ 
+            id: t.id, dayOfWeek: t.day_of_week || t.dayOfWeek, startTime: t.start_time || t.startTime, 
+            endTime: t.end_time || t.endTime, subject: t.subject, studentId: t.student_id || t.studentId, 
+            instructorId: t.instructor_id || t.instructorId, room: t.room 
+          }))
+        );
       } else {
         setTimetable(MOCK_TIMETABLE);
       }
 
-      if (sessionData) setAllSessions(sessionData.map(s => ({ 
-        id: s.id, studentId: s.student_id || s.studentId, date: s.date, subject: s.subject, minutes: s.minutes 
-      })));
+      if (sessionData) {
+        // サニタイズ：存在しない生徒の学習ログを排除
+        setAllSessions(sessionData
+          .filter(s => validStudentIds.has(s.student_id || s.studentId))
+          .map(s => ({ 
+            id: s.id, studentId: s.student_id || s.studentId, date: s.date, subject: s.subject, minutes: s.minutes 
+          }))
+        );
+      }
 
     } catch (err) {
-      console.warn("Initial sync jitter, falling back to local.");
+      console.warn("Sync jitter detected. Staying on current state.");
     } finally {
       setIsLoading(false);
     }
@@ -172,28 +206,23 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchAllData();
-    const safetyNet = setTimeout(() => {
-      setIsLoading(false);
-    }, 3000); 
+    const safetyNet = setTimeout(() => { setIsLoading(false); }, 3000); 
     return () => clearTimeout(safetyNet);
   }, [fetchAllData]);
 
   useEffect(() => { 
     if (!isAuthenticated) return;
-    
     let channel: any;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase.channel('db-sync-v3.1.2')
+      channel = supabase.channel('db-sync-v3.2.0')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
           if (!isUpdatingRef.current) fetchAllData(true);
         })
         .subscribe();
     }
-
     const syncTimer = window.setInterval(() => {
       if (!isUpdatingRef.current) fetchAllData(true);
     }, 15000); 
-
     return () => {
       if (channel) supabase.removeChannel(channel);
       clearInterval(syncTimer);
@@ -302,13 +331,14 @@ const App: React.FC = () => {
   const handleDeleteStudent = async (id: string) => {
     startUpdate();
     try {
-      // ローカルステートを即時更新して同期不具合を防ぐ
+      // 1. ローカルステートを即時一斉削除（同期ズレによる残留を物理的に防止）
       setStudents(prev => prev.filter(s => s.id !== id));
       setReports(prev => prev.filter(r => r.studentId !== id));
       setAllSessions(prev => prev.filter(s => s.studentId !== id));
       setTimetable(prev => prev.filter(t => t.studentId !== id));
       setMockExams(prev => prev.filter(m => m.studentId !== id));
 
+      // 2. データベースから全関連データを完全に抹消
       if (isSupabaseConfigured && supabase) {
         await Promise.all([
           supabase.from('students').delete().eq('id', id),
@@ -454,20 +484,31 @@ const App: React.FC = () => {
   const handleDeleteInstructor = async (id: string) => {
     startUpdate();
     try {
-      // ローカルステートを即時更新
+      // 1. ローカルステートを即時一斉削除（同期不備を物理的に防止）
       setInstructors(prev => prev.filter(i => i.id !== id));
       setTimetable(prev => prev.filter(t => t.instructorId !== id));
-      // 担当生徒の紐付けも解除
       setStudents(prev => prev.map(s => ({
         ...s,
         instructorIds: (s.instructorIds || []).filter(iid => iid !== id)
       })));
 
+      // 2. データベース上の全関連データを連鎖的に削除（他デバイスでの「幽霊表示」を根絶）
       if (isSupabaseConfigured && supabase) {
+        const { data: allStudents } = await supabase.from('students').select('id, instructor_ids');
+        let studentUpdates: Promise<any>[] = [];
+        if (allStudents) {
+          studentUpdates = allStudents
+            .filter(s => (s.instructor_ids || []).includes(id))
+            .map(s => {
+              const newIds = s.instructor_ids.filter((iid: string) => iid !== id);
+              return supabase.from('students').update({ instructor_ids: newIds }).eq('id', s.id);
+            });
+        }
         await Promise.all([
           supabase.from('instructors').delete().eq('id', id),
           supabase.from('timetable').delete().eq('instructor_id', id),
-          supabase.from('report_drafts').delete().eq('instructor_id', id)
+          supabase.from('report_drafts').delete().eq('instructor_id', id),
+          ...studentUpdates
         ]);
       }
     } finally { endUpdate(); }
@@ -575,7 +616,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.1.2</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.2.0</p>
       </div>
     </div>
   );
