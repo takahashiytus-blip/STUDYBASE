@@ -199,13 +199,18 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // 1. 初期データ読み込み（認証に関わらず実行し、ログイン情報を取得する）
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
+  // 2. 認証後の同期処理
   useEffect(() => { 
     if (!isAuthenticated) return;
-    fetchAllData(); 
     
     let channel: any;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase.channel('db-integrity-final-v3.0')
+      channel = supabase.channel('db-integrity-final-v3.0.1')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
           if (!isUpdatingRef.current) fetchAllData(true);
         })
@@ -662,7 +667,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.0.0</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.0.1</p>
       </div>
     </div>
   );
