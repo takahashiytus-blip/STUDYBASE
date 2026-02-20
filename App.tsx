@@ -95,7 +95,7 @@ const App: React.FC = () => {
         supabase.from('study_sessions').select('*')
       ]);
 
-      // 1. 最新の有効なマスターIDセットを作成（同期不整合の検知用）
+      // 1. マスターIDセットの確立（サニタイズの基準）
       const validInstructorIds = new Set((instructorData || []).map(i => i.id));
       const validStudentIds = new Set((studentData || []).map(s => s.id));
 
@@ -106,9 +106,10 @@ const App: React.FC = () => {
       }));
       setInstructors(latestInstructors.length > 0 ? latestInstructors : MOCK_INSTRUCTORS);
       
+      // 2. 各テーブルの取得時サニタイズ（幽霊データの自動排除）
       if (studentData && studentData.length > 0) {
         setStudents(studentData.map(s => {
-          // サニタイズ：存在しない講師IDを配列から自動排除（同期不備の最終防衛ライン）
+          // 生徒情報のサニタイズ：削除済み講師IDを配列から除去
           const rawIds = Array.isArray(s.instructor_ids) ? s.instructor_ids : (s.instructorIds || []);
           const cleanInstructorIds = rawIds.filter((id: string) => validInstructorIds.has(id));
 
@@ -142,7 +143,7 @@ const App: React.FC = () => {
       }
 
       if (reportData) {
-        // サニタイズ：存在しない生徒の報告書は表示しない
+        // 報告書のサニタイズ：削除済み生徒のデータは隠す
         setReports(reportData
           .filter(r => validStudentIds.has(r.student_id || r.studentId))
           .map(r => ({
@@ -163,7 +164,7 @@ const App: React.FC = () => {
       }
 
       if (mockData) {
-        // サニタイズ：存在しない生徒の成績は排除
+        // 模試成績のサニタイズ
         setMockExams(mockData
           .filter(m => validStudentIds.has(m.student_id || m.studentId))
           .map(m => ({ 
@@ -174,7 +175,7 @@ const App: React.FC = () => {
       }
 
       if (timetableData) {
-        // サニタイズ：生徒または講師が削除されている枠は非表示にする
+        // 時間割のサニタイズ：生徒または講師が削除されている枠は非表示
         setTimetable(timetableData
           .filter(t => validStudentIds.has(t.student_id || t.studentId) && validInstructorIds.has(t.instructor_id || t.instructorId))
           .map(t => ({ 
@@ -188,7 +189,7 @@ const App: React.FC = () => {
       }
 
       if (sessionData) {
-        // サニタイズ：存在しない生徒の学習ログを排除
+        // 学習ログのサニタイズ
         setAllSessions(sessionData
           .filter(s => validStudentIds.has(s.student_id || s.studentId))
           .map(s => ({ 
@@ -198,7 +199,7 @@ const App: React.FC = () => {
       }
 
     } catch (err) {
-      console.warn("Sync jitter detected. Staying on current state.");
+      console.warn("Sync overlap prevented. Using existing state.");
     } finally {
       setIsLoading(false);
     }
@@ -214,7 +215,7 @@ const App: React.FC = () => {
     if (!isAuthenticated) return;
     let channel: any;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase.channel('db-sync-v3.2.0')
+      channel = supabase.channel('db-sync-v3.2.5')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
           if (!isUpdatingRef.current) fetchAllData(true);
         })
@@ -331,14 +332,14 @@ const App: React.FC = () => {
   const handleDeleteStudent = async (id: string) => {
     startUpdate();
     try {
-      // 1. ローカルステートを即時一斉削除（同期ズレによる残留を物理的に防止）
+      // 1. ローカルステートを即時一斉削除（幽霊防止）
       setStudents(prev => prev.filter(s => s.id !== id));
       setReports(prev => prev.filter(r => r.studentId !== id));
       setAllSessions(prev => prev.filter(s => s.studentId !== id));
       setTimetable(prev => prev.filter(t => t.studentId !== id));
       setMockExams(prev => prev.filter(m => m.studentId !== id));
 
-      // 2. データベースから全関連データを完全に抹消
+      // 2. DBから全関連データを完全に抹消（連鎖削除の徹底）
       if (isSupabaseConfigured && supabase) {
         await Promise.all([
           supabase.from('students').delete().eq('id', id),
@@ -484,7 +485,7 @@ const App: React.FC = () => {
   const handleDeleteInstructor = async (id: string) => {
     startUpdate();
     try {
-      // 1. ローカルステートを即時一斉削除（同期不備を物理的に防止）
+      // 1. ローカルステートを即時一斉削除
       setInstructors(prev => prev.filter(i => i.id !== id));
       setTimetable(prev => prev.filter(t => t.instructorId !== id));
       setStudents(prev => prev.map(s => ({
@@ -492,7 +493,7 @@ const App: React.FC = () => {
         instructorIds: (s.instructorIds || []).filter(iid => iid !== id)
       })));
 
-      // 2. データベース上の全関連データを連鎖的に削除（他デバイスでの「幽霊表示」を根絶）
+      // 2. DB連鎖削除（生徒のID配列からも確実に除去）
       if (isSupabaseConfigured && supabase) {
         const { data: allStudents } = await supabase.from('students').select('id, instructor_ids');
         let studentUpdates: Promise<any>[] = [];
@@ -616,7 +617,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.2.0</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.2.5</p>
       </div>
     </div>
   );
