@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Instructor, Student } from '../types';
 
 interface InstructorCenterProps {
@@ -34,12 +34,20 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
 
   const selectedInstructor = instructors.find(i => i.id === selectedInstructorId);
   
+  // 講師が削除された場合に選択状態をクリアする
+  useEffect(() => {
+    if (selectedInstructorId && !selectedInstructor) {
+      setSelectedInstructorId(null);
+      setIsEditing(false);
+    }
+  }, [instructors, selectedInstructorId, selectedInstructor]);
+
   const assignedStudents = selectedInstructorId 
-    ? students.filter(s => s.instructorIds.includes(selectedInstructorId))
+    ? students.filter(s => (s.instructorIds || []).includes(selectedInstructorId))
     : [];
   
   const availableStudents = selectedInstructorId
-    ? students.filter(s => !s.instructorIds.includes(selectedInstructorId))
+    ? students.filter(s => !(s.instructorIds || []).includes(selectedInstructorId))
     : [];
 
   const handleStartEdit = () => {
@@ -75,8 +83,7 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
     if (!selectedInstructorId || !onDeleteInstructor) return;
     if (window.confirm(`${editName} 講師の情報を完全に削除しますか？担当生徒の紐付けも解除されます。`)) {
       onDeleteInstructor(selectedInstructorId);
-      setSelectedInstructorId(null);
-      setIsEditing(false);
+      // 削除後のUIリセットは useEffect がハンドルする
     }
   };
 

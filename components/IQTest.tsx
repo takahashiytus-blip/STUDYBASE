@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { IQ_QUESTION_BANK, IQQuestion, IQCategory } from '../constants/iqTestData';
 import { generateIQAnalysis } from '../services/geminiService';
 import { IQResult } from '../types';
-import { getLocalISOString } from '../App';
+import { getLocalISOString, generateUniqueId } from '../utils';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 
 interface IQTestProps {
@@ -14,169 +13,128 @@ interface IQTestProps {
   onComplete: (score: number, breakdown: any, analysis: string) => void;
 }
 
-const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHistory, onComplete }) => {
-  const [gameState, setGameState] = useState<'idle' | 'testing' | 'analyzing' | 'finished'>('idle');
+export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHistory, onComplete }) => {
+  const [step, setStep] = useState<'start' | 'testing' | 'analyzing' | 'result'>('start');
   const [currentQuestions, setCurrentQuestions] = useState<IQQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [aiAnalysis, setAiAnalysis] = useState('');
-  const [scoreData, setScoreData] = useState<any>(null);
-  const [isLimitReached, setIsLimitReached] = useState(false);
-
-  useEffect(() => {
-    const today = getLocalISOString();
-    const hasTestedTodayInHistory = iqHistory && iqHistory.some(res => res.date === today);
-    const lastTestDateLocal = localStorage.getItem(`lastIQTestDate_${userId}`);
-    
-    if (hasTestedTodayInHistory || lastTestDateLocal === today) {
-      setIsLimitReached(true);
-    }
-  }, [userId, iqHistory]);
+  const [currentResult, setCurrentResult] = useState<IQResult | null>(null);
 
   const startTest = () => {
-    if (isLimitReached) return;
-
-    const shuffled = [...IQ_QUESTION_BANK].sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, 10);
-    
-    setCurrentQuestions(selected);
-    setCurrentIndex(0);
+    const shuffled = [...IQ_QUESTION_BANK].sort(() => Math.random() - 0.5).slice(0, 10);
+    setCurrentQuestions(shuffled);
     setAnswers({});
-    setGameState('testing');
+    setCurrentIndex(0);
+    setStep('testing');
   };
 
-  const handleAnswer = (choice: string) => {
+  const handleAnswer = (answer: string) => {
     const q = currentQuestions[currentIndex];
-    setAnswers({ ...answers, [q.id]: choice });
+    const newAnswers = { ...answers, [q.id]: answer };
+    setAnswers(newAnswers);
 
-    if (currentIndex + 1 < currentQuestions.length) {
+    if (currentIndex < currentQuestions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      processResult();
+      finishTest(newAnswers);
     }
   };
 
-  const processResult = async () => {
-    setGameState('analyzing');
+  const finishTest = async (finalAnswers: Record<string, string>) => {
+    setStep('analyzing');
     
-    let totalWeight = 0;
-    let earnedWeight = 0;
-    const categoryScores: Record<IQCategory, { total: number; earned: number }> = {
-      logical: { total: 0, earned: 0 },
-      numerical: { total: 0, earned: 0 },
-      verbal: { total: 0, earned: 0 },
-      spatial: { total: 0, earned: 0 }
-    };
+    let totalScore = 0;
+    const breakdown = { logical: 0, numerical: 0, verbal: 0, spatial: 0 };
+    const counts = { logical: 0, numerical: 0, verbal: 0, spatial: 0 };
 
     currentQuestions.forEach(q => {
-      totalWeight += q.weight;
-      categoryScores[q.category].total += q.weight;
-      if (answers[q.id] === q.answer) {
-        earnedWeight += q.weight;
-        categoryScores[q.category].earned += q.weight;
+      counts[q.category]++;
+      if (finalAnswers[q.id] === q.answer) {
+        totalScore += q.weight;
+        breakdown[q.category] += 100;
       }
     });
 
-    const percentageBreakdown = {
-      logical: Math.round((categoryScores.logical.earned / (categoryScores.logical.total || 1)) * 100),
-      numerical: Math.round((categoryScores.numerical.earned / (categoryScores.numerical.total || 1)) * 100),
-      verbal: Math.round((categoryScores.verbal.earned / (categoryScores.verbal.total || 1)) * 100),
-      spatial: Math.round((categoryScores.spatial.earned / (categoryScores.spatial.total || 1)) * 100)
-    };
+    Object.keys(breakdown).forEach(key => {
+      const cat = key as IQCategory;
+      breakdown[cat] = Math.round(breakdown[cat] / (counts[cat] || 1));
+    });
 
-    const finalScore = Math.round((earnedWeight / totalWeight) * 100);
-    
+    const finalScore = Math.min(100, Math.round((totalScore / 150) * 100) + 40);
+
     try {
-      const analysis = await generateIQAnalysis(studentName, grade, finalScore, percentageBreakdown);
-      setAiAnalysis(analysis || "分析が完了しました。");
+      const analysis = await generateIQAnalysis(studentName, grade, finalScore, breakdown);
+      onComplete(finalScore, breakdown, analysis);
       
-      const radarData = [
-        { subject: '論理推理', value: percentageBreakdown.logical },
-        { subject: '数値処理', value: percentageBreakdown.numerical },
-        { subject: '言語能力', value: percentageBreakdown.verbal },
-        { subject: '空間把握', value: percentageBreakdown.spatial }
-      ];
-      
-      setScoreData({ finalScore, radarData });
-      setGameState('finished');
-      
-      const today = getLocalISOString();
-      localStorage.setItem(`lastIQTestDate_${userId}`, today);
-      onComplete(finalScore, percentageBreakdown, analysis || "");
+      const result: IQResult = {
+        id: generateUniqueId('iq'),
+        date: getLocalISOString(),
+        score: finalScore,
+        estimatedIQ: Math.round(100 + (finalScore - 50) * 0.8),
+        breakdown,
+        aiAnalysis: analysis
+      };
+      setCurrentResult(result);
+      setStep('result');
     } catch (error) {
-      setAiAnalysis("現在AI分析が利用できません。スコアのみ表示します。");
-      setGameState('finished');
+      console.error("IQ Analysis Error:", error);
+      setStep('start');
+      alert("分析中にエラーが発生しました。");
     }
   };
 
-  const currentQ = currentQuestions[currentIndex];
-
-  if (gameState === 'idle') {
+  if (step === 'start') {
     return (
-      <div className="max-w-4xl mx-auto py-12 animate-fadeIn text-center space-y-10">
-        <div className="space-y-4">
-          <div className="text-8xl">🧠</div>
-          <h2 className="text-4xl font-black text-slate-800 tracking-tighter italic">AI 知能・認知特性診断</h2>
-          <p className="text-slate-500 font-bold max-w-lg mx-auto leading-relaxed">
-            論理・数値・言語・空間の4項目から、あなたの「学びの特性」を明らかにします。
+      <div className="space-y-8 animate-fadeIn">
+        <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 text-center space-y-6">
+          <div className="w-24 h-24 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center text-4xl mx-auto shadow-inner">🧠</div>
+          <h2 className="text-3xl font-black text-slate-800">AI知能・特性診断</h2>
+          <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">
+            論理・数値・言語・空間の4領域からあなたの得意分野を分析。AIが最適な学習スタイルを提案します。
           </p>
+          <button onClick={startTest} className="px-12 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-lg shadow-xl hover:bg-indigo-700 transition-all active:scale-95">
+            診断を開始する
+          </button>
         </div>
-        <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm max-w-sm mx-auto space-y-6">
-          <ul className="text-left text-sm font-bold text-slate-600 space-y-3">
-            <li className="flex items-center gap-3"><span className="text-indigo-500 font-black">10</span> 問の実戦テストに挑戦</li>
-            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> アカウント共通の受検制限</li>
-            <li className="flex items-center gap-3"><span className="text-indigo-500">✓</span> 1日 <span className="text-rose-500 font-black">1回</span> 限定（全端末共通）</li>
-          </ul>
-          
-          {isLimitReached ? (
-            <div className="p-6 bg-rose-50 border-2 border-rose-100 rounded-3xl">
-              <p className="text-rose-600 font-black text-sm">本日の診断は完了しています。<br/>また明日挑戦してください。</p>
-              <p className="text-[10px] text-slate-400 mt-2">※別端末での受検結果も同期されています</p>
+
+        {iqHistory.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest ml-4">診断履歴</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {iqHistory.map(res => (
+                <div key={res.id} onClick={() => { setCurrentResult(res); setStep('result'); }} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase">{res.date}</p>
+                    <p className="text-lg font-black text-slate-800">推定IQ: {res.estimatedIQ}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 font-black">➔</div>
+                </div>
+              ))}
             </div>
-          ) : (
-            <button onClick={startTest} className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95">診断を開始する</button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  if (gameState === 'testing' && currentQ) {
+  if (step === 'testing') {
+    const q = currentQuestions[currentIndex];
     return (
-      <div className="max-w-3xl mx-auto py-12 animate-fadeIn space-y-8">
-        <div className="flex justify-between items-center px-4">
-           <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Question {currentIndex + 1} / {currentQuestions.length}</span>
-           <div className="h-1.5 w-48 bg-slate-100 rounded-full overflow-hidden">
-             <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${((currentIndex + 1) / currentQuestions.length) * 100}%` }}></div>
-           </div>
-        </div>
-
-        <div className="bg-white p-10 md:p-16 rounded-[3rem] shadow-xl border border-slate-100 space-y-12">
-          <div className="space-y-6 text-center">
-            <span className="inline-block px-4 py-1 bg-indigo-50 text-indigo-500 text-[10px] font-black rounded-full uppercase tracking-widest">
-              {currentQ.category === 'logical' ? '論理推理' : currentQ.category === 'numerical' ? '数値処理' : currentQ.category === 'verbal' ? '言語能力' : '空間把握'}
-            </span>
-            <h3 className="text-2xl font-black text-slate-800 leading-relaxed whitespace-pre-wrap">{currentQ.question}</h3>
-            {currentQ.svgData && (
-              <div className="p-8 bg-slate-50 rounded-3xl inline-block shadow-inner" dangerouslySetInnerHTML={{ __html: currentQ.svgData }} />
-            )}
+      <div className="max-w-2xl mx-auto space-y-8 animate-fadeIn">
+        <div className="flex justify-between items-end px-4">
+          <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] bg-indigo-50 px-3 py-1 rounded-full">Question {currentIndex + 1} / {currentQuestions.length}</span>
+          <div className="h-1.5 w-32 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${((currentIndex + 1) / currentQuestions.length) * 100}%` }}></div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {currentQ.choices.map((choice, i) => (
-              <button 
-                key={i} 
-                onClick={() => handleAnswer(choice)}
-                className="bg-slate-50 border-2 border-slate-100 p-6 rounded-2xl text-lg font-bold text-slate-700 hover:bg-indigo-50 hover:border-indigo-500 hover:text-indigo-700 transition-all active:scale-[0.98] text-center flex flex-col items-center justify-center gap-2"
-              >
-                {currentQ.choiceSvgs && currentQ.choiceSvgs[i] ? (
-                  <>
-                    <div className="p-2 bg-white rounded-xl shadow-sm" dangerouslySetInnerHTML={{ __html: currentQ.choiceSvgs[i] }} />
-                    <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{choice}</span>
-                  </>
-                ) : (
-                  choice
-                )}
+        </div>
+        <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 space-y-8">
+          <h3 className="text-xl font-black text-slate-800 leading-relaxed text-center">{q.question}</h3>
+          {q.svgData && <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100" dangerouslySetInnerHTML={{ __html: q.svgData }} />}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {q.choices.map((choice, idx) => (
+              <button key={idx} onClick={() => handleAnswer(choice)} className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-indigo-500 hover:bg-indigo-50 transition-all active:scale-95 flex flex-col items-center gap-3">
+                {q.choiceSvgs && <div className="w-full" dangerouslySetInnerHTML={{ __html: q.choiceSvgs[idx] }} />}
+                <span>{choice}</span>
               </button>
             ))}
           </div>
@@ -185,79 +143,76 @@ const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHistory, 
     );
   }
 
-  if (gameState === 'analyzing') {
+  if (step === 'analyzing') {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center space-y-6">
-        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
-        <p className="text-xl font-black text-slate-800">特性を分析しています...</p>
-        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest animate-pulse">AI is mapping your cognitive profile</p>
+        <div className="w-20 h-20 border-8 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+        <div className="text-center">
+          <h2 className="text-2xl font-black text-slate-800">AI分析中...</h2>
+          <p className="text-slate-400 font-bold mt-2">思考パターンと認知特性を特定しています</p>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-5xl mx-auto py-12 animate-slideUp space-y-10">
-      <header className="text-center">
-        <h2 className="text-3xl font-black text-slate-800 italic">診断が完了しました</h2>
-        <p className="text-slate-400 font-bold mt-1">あなたの強みと最適な学習法をAIが特定しました</p>
-      </header>
+  if (step === 'result' && currentResult) {
+    const radarData = [
+      { subject: '論理', A: currentResult.breakdown.logical, full: 100 },
+      { subject: '数値', A: currentResult.breakdown.numerical, full: 100 },
+      { subject: '言語', A: currentResult.breakdown.verbal, full: 100 },
+      { subject: '空間', A: currentResult.breakdown.spatial, full: 100 },
+    ];
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-5 space-y-8">
-          <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 text-center">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Diagnostic Score</p>
-             <div className="flex items-baseline justify-center gap-1">
-               <span className="text-7xl font-black text-indigo-600 italic tracking-tighter">{scoreData.finalScore}</span>
-               <span className="text-xl font-black text-slate-300">/ 100</span>
-             </div>
+    return (
+      <div className="space-y-8 animate-fadeIn pb-12">
+        <header className="flex justify-between items-center">
+          <button onClick={() => setStep('start')} className="text-sm font-black text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-2">← 戻る</button>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">診断日: {currentResult.date}</p>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-indigo-900 p-10 rounded-[3rem] shadow-2xl text-white text-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
+              <p className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.3em] mb-4">Cognitive Assessment Score</p>
+              <div className="flex items-baseline justify-center gap-2">
+                <span className="text-[12px] font-black text-indigo-400 uppercase">IQ</span>
+                <h3 className="text-7xl font-black drop-shadow-lg">{currentResult.estimatedIQ}</h3>
+              </div>
+              <p className="text-indigo-200 font-bold mt-4 italic">「あなたの認知能力は非常にユニークです」</p>
+            </div>
+
+            <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100 h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                  <PolarGrid stroke="#f1f5f9" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />
+                  <Radar name="Score" dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.6} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 h-[400px]">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 text-center">認知特性マップ</h4>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart 
-                cx="50%" 
-                cy="50%" 
-                outerRadius="65%" 
-                data={scoreData.radarData}
-                margin={{ top: 10, right: 40, bottom: 10, left: 40 }}
-              >
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 'bold' }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                <Radar
-                  name="Score"
-                  dataKey="value"
-                  stroke="#6366f1"
-                  fill="#6366f1"
-                  fillOpacity={0.5}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
+          <div className="lg:col-span-7 space-y-6">
+            <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 relative">
+              <span className="absolute top-10 right-10 text-4xl opacity-10">✨</span>
+              <h4 className="text-sm font-black text-indigo-500 uppercase tracking-widest mb-6 flex items-center gap-3">
+                <span className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">🧠</span>
+                AIによる特性分析と学習アドバイス
+              </h4>
+              <div className="prose prose-slate max-w-none">
+                <p className="text-slate-700 leading-relaxed font-bold whitespace-pre-wrap italic">
+                  {currentResult.aiAnalysis}
+                </p>
+              </div>
+            </div>
+            
+            <button onClick={startTest} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black shadow-xl hover:bg-black transition-all">再診断を受ける</button>
           </div>
-        </div>
-
-        <div className="lg:col-span-7 space-y-8">
-           <div className="bg-indigo-950 text-indigo-50 p-10 md:p-12 rounded-[3rem] shadow-2xl border border-white/5 relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
-             <h3 className="text-xl font-black mb-8 flex items-center gap-4">
-               <span className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-2xl shadow-sm">💡</span>
-               AI学習アドバイス
-             </h3>
-             <div className="prose prose-invert prose-indigo max-w-none">
-               <p className="text-[15px] leading-relaxed font-bold whitespace-pre-wrap italic">
-                 {aiAnalysis}
-               </p>
-             </div>
-           </div>
-
-           <button onClick={() => setGameState('idle')} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black hover:bg-black transition-all shadow-xl active:scale-[0.98]">
-             メニューに戻る
-           </button>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  }
 
-export default IQTest;
+  return null;
+};

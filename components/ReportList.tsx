@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Report, Student, UserRole, ReportMessage, AttendanceStatus } from '../types';
-import { parseSafeDate } from '../App';
+// Fix: Import parseSafeDate from '../utils' instead of '../App'
+import { parseSafeDate } from '../utils';
 
 interface ReportListProps {
   reports: Report[];

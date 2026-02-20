@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend } from 'recharts';
 import { Report, Student, UserRole, StudySession, MockExam, TimetableEntry, Instructor } from '../types';
-import { parseSafeDate, getLocalISOString } from '../App';
+// Fix: Import utility functions from '../utils' instead of '../App'
+import { parseSafeDate, getLocalISOString } from '../utils';
 
 interface DashboardProps {
   reports: Report[];

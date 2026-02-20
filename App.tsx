@@ -3,20 +3,23 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
 import { supabase, isSupabaseConfigured } from './services/supabase';
+import { generateUniqueId, getLocalISOString, parseSafeDate } from './utils';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import ReportForm from './components/ReportForm';
 import ReportList from './components/ReportList';
-import StudentCenter from './components/StudentCenter';
-import SalaryCenter from './components/SalaryCenter';
-import InterviewCenter from './components/InterviewCenter';
-import MockExamCenter from './components/MockExamCenter';
-import WordKing from './components/WordKing';
-import IQTest from './components/IQTest';
-import TimetableManager from './components/TimetableManager';
+import { StudentCenter } from './components/StudentCenter';
+import { SalaryCenter } from './components/SalaryCenter';
+import { InterviewCenter } from './components/InterviewCenter';
+import { MockExamCenter } from './components/MockExamCenter';
+import { WordKing } from './components/WordKing';
+import { IQTest } from './components/IQTest';
+import { TimetableManager } from './components/TimetableManager';
 import AdminSettings from './components/AdminSettings';
 import MessageCenter from './components/MessageCenter';
 import InstructorCenter from './components/InstructorCenter';
+
+export { getLocalISOString, parseSafeDate };
 
 type AuthStep = 'role-selection' | 'credentials';
 
@@ -28,24 +31,6 @@ const DEFAULT_ADMIN: AdminConfig = {
   wordKingClassroomRecord: 124,
   wordKingClassroomHolder: '初代王'
 };
-
-export const getLocalISOString = () => {
-  const now = new Date();
-  const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-export const parseSafeDate = (dateStr: string) => {
-  if (!dateStr) return new Date();
-  const parts = dateStr.split('-').map(Number);
-  if (parts.length !== 3) return new Date();
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-};
-
-export const generateUniqueId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -71,9 +56,8 @@ const App: React.FC = () => {
   const isUpdatingRef = useRef<boolean>(false);
   const updateTimeoutRef = useRef<number | null>(null);
 
-  // データの取得ロジック
   const fetchAllData = useCallback(async (isSilent = false) => {
-    if (isUpdatingRef.current && isSilent) return;
+    if (isUpdatingRef.current) return;
 
     if (!isSupabaseConfigured || !supabase) {
       if (!isSilent) {
@@ -118,123 +102,146 @@ const App: React.FC = () => {
         supabase.from('study_sessions').select('*')
       ]);
 
+      const latestInstructors = (instructorData || []).map(i => ({ 
+        id: i.id, name: i.name, specialty: i.specialty, 
+        loginId: i.loginId || i.login_id, 
+        password: i.password 
+      }));
+      setInstructors(latestInstructors);
+      
+      const validInstructorIds = new Set(latestInstructors.map(i => i.id));
+
+      if (studentData) {
+        setStudents(studentData.map(s => {
+          const rawIds = s.instructorIds || s.instructor_ids || [];
+          const cleanedIds = Array.isArray(rawIds) ? rawIds.filter((id: string) => validInstructorIds.has(id)) : [];
+          
+          return {
+            id: s.id, name: s.name, grade: s.grade, 
+            loginId: s.loginId || s.login_id, 
+            password: s.password,
+            targetSchool: s.targetSchool || s.target_school, 
+            targetFaculty: s.targetFaculty || s.target_faculty,
+            weeklyInstructorMessage: s.weeklyInstructorMessage || s.weekly_instructor_message, 
+            instructorIds: cleanedIds,
+            iqHistory: s.iqHistory || s.iq_history || [],
+            wordKingBest: s.wordKingBest || s.word_king_best || 0,
+            targets: s.targets || undefined
+          };
+        }));
+      }
+
       if (adminData) {
         setAdminConfig({
           id: adminData.id, 
           name: adminData.name, 
-          loginId: adminData.login_id || adminData.loginId,
-          passwordHash: adminData.password_hash || adminData.passwordHash || DEFAULT_ADMIN.passwordHash,
+          loginId: adminData.loginId || adminData.login_id,
+          passwordHash: adminData.passwordHash || adminData.password_hash || DEFAULT_ADMIN.passwordHash,
           location: adminData.location, 
-          wordKingClassroomRecord: adminData.word_king_record ?? adminData.wordKingClassroomRecord ?? 0,
-          wordKingClassroomHolder: adminData.word_king_holder || adminData.wordKingClassroomHolder || '---'
+          wordKingClassroomRecord: adminData.wordKingClassroomRecord ?? adminData.word_king_record ?? 0,
+          wordKingClassroomHolder: adminData.wordKingClassroomHolder || adminData.word_king_holder || '---'
         });
       }
 
-      if (studentData) {
-        setStudents(studentData.map(s => ({
-          id: s.id, name: s.name, grade: s.grade, 
-          loginId: s.login_id || s.loginId, 
-          password: s.password,
-          targetSchool: s.target_school || s.targetSchool, 
-          targetFaculty: s.target_faculty || s.targetFaculty,
-          weeklyInstructorMessage: s.weekly_instructor_message || s.weeklyInstructorMessage, 
-          instructorIds: s.instructor_ids || s.instructorIds || [],
-          iqHistory: s.iq_history || s.iqHistory || [],
-          wordKingBest: s.word_king_best || s.wordKingBest || 0,
-          targets: s.targets || undefined
-        })));
-      }
-
-      if (instructorData) setInstructors(instructorData.map(i => ({ 
-        id: i.id, name: i.name, specialty: i.specialty, 
-        loginId: i.login_id || i.loginId, 
-        password: i.password 
-      })));
-
       if (reportData) setReports(reportData.map(r => ({
         id: r.id, 
-        studentId: r.student_id || r.studentId, 
+        studentId: r.studentId || r.student_id, 
         date: r.date, 
         subject: r.subject, 
-        instructorName: r.instructor_name || r.instructorName,
-        sessionYear: r.session_year || r.sessionYear, 
-        sessionMonth: r.session_month || r.sessionMonth, 
-        sessionCount: r.session_count || r.sessionCount,
-        attendanceStatus: r.attendance_status || r.attendanceStatus, 
-        rawNotes: r.raw_notes || r.rawNotes, 
-        homeworkAssigned: r.homework_assigned || r.homeworkAssigned,
-        homeworkCompletion: r.homework_completion || r.homeworkCompletion, 
-        proposedSelfStudyDays: r.proposed_self_study_days || r.proposedSelfStudyDays,
-        generatedContent: r.generated_content || r.generatedContent, 
-        quizScore: r.quiz_score || r.quizScore, 
+        instructorName: r.instructorName || r.instructor_name,
+        sessionYear: r.sessionYear || r.session_year, 
+        sessionMonth: r.sessionMonth || r.session_month, 
+        sessionCount: r.sessionCount || r.session_count,
+        attendanceStatus: r.attendanceStatus || r.attendance_status,
+        rawNotes: r.rawNotes || r.raw_notes, 
+        homeworkAssigned: r.homeworkAssigned || r.homework_assigned,
+        homeworkCompletion: r.homeworkCompletion || r.homework_completion, 
+        proposedSelfStudyDays: r.proposedSelfStudyDays || r.proposed_self_study_days,
+        generatedContent: r.generatedContent || r.generated_content, 
+        quizScore: r.quizScore || r.quiz_score, 
         messages: r.messages || [], 
-        needsAction: r.needs_action || r.needsAction
+        needsAction: r.needsAction || r.needs_action || false
       })));
 
       if (mockData) setMockExams(mockData.map(m => ({ 
         id: m.id, 
-        studentId: m.student_id || m.studentId, 
-        examName: m.exam_name || m.examName, 
-        examDate: m.exam_date || m.examDate, 
+        studentId: m.studentId || m.student_id, 
+        examName: m.examName || m.exam_name, 
+        examDate: m.examDate || m.exam_date,
         scores: m.scores || {} 
       })));
 
-      if (timetableData) setTimetable(timetableData.map(t => ({ 
-        id: t.id, 
-        dayOfWeek: t.day_of_week || t.dayOfWeek, 
-        startTime: t.start_time || t.startTime, 
-        endTime: t.end_time || t.endTime, 
-        subject: t.subject, 
-        studentId: t.student_id || t.studentId, 
-        instructorId: t.instructor_id || t.instructorId, 
-        room: t.room 
-      })));
+      if (timetableData) {
+        setTimetable(timetableData.map(t => ({ 
+          id: t.id, 
+          dayOfWeek: t.dayOfWeek || t.day_of_week, 
+          startTime: t.startTime || t.start_time, 
+          endTime: t.endTime || t.end_time, 
+          subject: t.subject, 
+          studentId: t.studentId || t.student_id, 
+          instructorId: t.instructorId || t.instructor_id, 
+          room: t.room 
+        })).filter(t => !t.instructorId || validInstructorIds.has(t.instructorId)));
+      }
 
       if (sessionData) setAllSessions(sessionData.map(s => ({ 
         id: s.id, 
-        studentId: s.student_id || s.studentId, 
+        studentId: s.studentId || s.student_id, 
         date: s.date, 
         subject: s.subject, 
         minutes: s.minutes 
       })));
 
     } catch (err) {
-      console.error("Critical Fetch Error:", err);
+      console.error("Critical Sync Error:", err);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // リアルタイム同期 & フォーカス復帰の設定
   useEffect(() => { 
+    if (!isAuthenticated) return;
     fetchAllData(); 
     
-    if (isSupabaseConfigured && supabase && isAuthenticated) {
-      // 全テーブルの変更を監視するチャネル
-      const channel = supabase.channel('schema-db-changes')
+    let channel: any;
+    if (isSupabaseConfigured && supabase) {
+      channel = supabase.channel('db-integrity-final-v3.0')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-          fetchAllData(true); // 何か変更があれば即座に再取得
+          if (!isUpdatingRef.current) fetchAllData(true);
         })
         .subscribe();
-
-      // 補助的に5秒ごとのポーリング
-      const syncTimer = window.setInterval(() => fetchAllData(true), 5000); 
-
-      // タブ復帰時の強制取得
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') fetchAllData(true);
-      };
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('focus', () => fetchAllData(true));
-
-      return () => {
-        supabase.removeChannel(channel);
-        clearInterval(syncTimer);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('focus', () => fetchAllData(true));
-      };
     }
+
+    const syncTimer = window.setInterval(() => {
+      if (!isUpdatingRef.current) fetchAllData(true);
+    }, 15000); 
+
+    const handleSyncOnVisibility = () => {
+      if (!isUpdatingRef.current && (document.visibilityState === 'visible' || document.hasFocus())) {
+        fetchAllData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleSyncOnVisibility);
+    window.addEventListener('focus', handleSyncOnVisibility);
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      clearInterval(syncTimer);
+      document.removeEventListener('visibilitychange', handleSyncOnVisibility);
+      window.removeEventListener('focus', handleSyncOnVisibility);
+    };
   }, [fetchAllData, isAuthenticated]);
+
+  const startUpdate = () => {
+    isUpdatingRef.current = true;
+    if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
+    updateTimeoutRef.current = window.setTimeout(() => { isUpdatingRef.current = false; }, 8000);
+  };
+
+  const endUpdate = () => {
+    isUpdatingRef.current = false;
+    if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,30 +277,11 @@ const App: React.FC = () => {
     setActiveTab('dashboard'); 
   };
 
-  // セーフティロック制御
-  const startUpdate = () => {
-    isUpdatingRef.current = true;
-    if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
-    updateTimeoutRef.current = window.setTimeout(() => {
-      isUpdatingRef.current = false; // 10秒経っても終わらなければ強制解放
-    }, 10000);
-  };
-
-  const endUpdate = () => {
-    isUpdatingRef.current = false;
-    if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
-  };
-
-  // ---------------------------------------------------------
-  // 同期化ハンドラ ( Realtime 導入により、より確実に )
-  // ---------------------------------------------------------
-
   const handleUpdateAdminConfig = async (updates: Partial<AdminConfig>) => {
     startUpdate();
     try {
       let latestConfig: AdminConfig = { ...adminConfig, ...updates };
       setAdminConfig(latestConfig);
-      
       if (isSupabaseConfigured && supabase) {
         await supabase.from('admin_config').update({
           name: latestConfig.name, 
@@ -305,16 +293,13 @@ const App: React.FC = () => {
         }).eq('id', 1);
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleUpdateStudent = async (id: string, updates: Partial<Student>) => {
     startUpdate();
     try {
       setStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-      
       if (isSupabaseConfigured && supabase) {
         const dbUpdates: any = {};
         if (updates.name !== undefined) dbUpdates.name = updates.name;
@@ -328,15 +313,12 @@ const App: React.FC = () => {
         if (updates.wordKingBest !== undefined) dbUpdates.word_king_best = updates.wordKingBest;
         if (updates.targets !== undefined) dbUpdates.targets = updates.targets;
         if (updates.instructorIds !== undefined) dbUpdates.instructor_ids = updates.instructorIds;
-        
         if (Object.keys(dbUpdates).length > 0) {
           await supabase.from('students').update(dbUpdates).eq('id', id);
           await fetchAllData(true);
         }
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleAddStudent = async (d: Omit<Student, 'id' | 'instructorIds'>) => {
@@ -345,27 +327,31 @@ const App: React.FC = () => {
       const id = generateUniqueId('s');
       if (isSupabaseConfigured && supabase) {
         await supabase.from('students').insert({ 
-          id, name: d.name, grade: d.grade, login_id: d.loginId, password: d.password, 
-          target_school: d.targetSchool, target_faculty: d.targetFaculty 
+          id, 
+          name: d.name, 
+          grade: d.grade, 
+          login_id: d.loginId, 
+          password: d.password, 
+          target_school: d.targetSchool, 
+          target_faculty: d.targetFaculty 
         });
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleDeleteStudent = async (id: string) => {
     startUpdate();
     try {
-      setStudents(prev => prev.filter(s => s.id !== id));
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('students').delete().eq('id', id);
+        await Promise.all([
+          supabase.from('students').delete().eq('id', id),
+          supabase.from('report_drafts').delete().eq('student_id', id),
+          supabase.from('study_sessions').delete().eq('student_id', id)
+        ]);
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleLogSession = async (session: StudySession) => {
@@ -373,14 +359,15 @@ const App: React.FC = () => {
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('study_sessions').insert({
-          id: session.id, student_id: session.studentId, date: session.date,
-          subject: session.subject, minutes: session.minutes
+          id: session.id, 
+          student_id: session.studentId, 
+          date: session.date,
+          subject: session.subject, 
+          minutes: session.minutes
         });
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleSaveReport = async (report: Report) => {
@@ -388,18 +375,27 @@ const App: React.FC = () => {
     try {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('reports').insert({
-          id: report.id, student_id: report.studentId, date: report.date, subject: report.subject, instructor_name: report.instructorName,
-          session_year: report.sessionYear, session_month: report.sessionMonth, session_count: report.sessionCount,
-          attendance_status: report.attendanceStatus, raw_notes: report.rawNotes, homework_assigned: report.homeworkAssigned,
-          homework_completion: report.homeworkCompletion, proposed_self_study_days: report.proposedSelfStudyDays,
-          generated_content: report.generatedContent, quiz_score: report.quizScore, 
-          messages: report.messages || [], needs_action: report.needsAction || false
+          id: report.id, 
+          student_id: report.studentId, 
+          date: report.date, 
+          subject: report.subject, 
+          instructor_name: report.instructorName,
+          session_year: report.sessionYear, 
+          session_month: report.sessionMonth, 
+          session_count: report.sessionCount,
+          attendance_status: report.attendanceStatus, 
+          raw_notes: report.rawNotes, 
+          homework_assigned: report.homeworkAssigned,
+          homework_completion: report.homeworkCompletion, 
+          proposed_self_study_days: report.proposedSelfStudyDays,
+          generated_content: report.generatedContent, 
+          quiz_score: report.quizScore, 
+          messages: report.messages || [], 
+          needs_action: report.needsAction || false
         });
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleUpdateReport = async (reportId: string, updates: Partial<Report>) => {
@@ -408,17 +404,29 @@ const App: React.FC = () => {
       setReports(prev => prev.map(r => r.id === reportId ? { ...r, ...updates } : r));
       if (isSupabaseConfigured && supabase) {
         const dbUpdates: any = {};
+        if (updates.subject !== undefined) dbUpdates.subject = updates.subject;
+        if (updates.date !== undefined) dbUpdates.date = updates.date;
+        if (updates.studentId !== undefined) dbUpdates.student_id = updates.studentId;
+        if (updates.instructorName !== undefined) dbUpdates.instructor_name = updates.instructorName;
+        if (updates.sessionYear !== undefined) dbUpdates.session_year = updates.sessionYear;
+        if (updates.sessionMonth !== undefined) dbUpdates.session_month = updates.sessionMonth;
+        if (updates.sessionCount !== undefined) dbUpdates.session_count = updates.sessionCount;
+        if (updates.attendanceStatus !== undefined) dbUpdates.attendance_status = updates.attendanceStatus;
+        if (updates.homeworkCompletion !== undefined) dbUpdates.homework_completion = updates.homeworkCompletion;
+        if (updates.proposedSelfStudyDays !== undefined) dbUpdates.proposed_self_study_days = updates.proposedSelfStudyDays;
         if (updates.messages !== undefined) dbUpdates.messages = updates.messages;
         if (updates.needsAction !== undefined) dbUpdates.needs_action = updates.needsAction;
         if (updates.generatedContent !== undefined) dbUpdates.generated_content = updates.generatedContent;
+        if (updates.quizScore !== undefined) dbUpdates.quiz_score = updates.quizScore;
+        if (updates.rawNotes !== undefined) dbUpdates.raw_notes = updates.rawNotes;
+        if (updates.homeworkAssigned !== undefined) dbUpdates.homework_assigned = updates.homeworkAssigned;
+        
         if (Object.keys(dbUpdates).length > 0) {
           await supabase.from('reports').update(dbUpdates).eq('id', reportId);
           await fetchAllData(true);
         }
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleAddReportMessage = async (reportId: string, text: string) => {
@@ -426,7 +434,6 @@ const App: React.FC = () => {
     try {
       let currentMessages: ReportMessage[] = [];
       let currentNeedsAction = false;
-      
       if (isSupabaseConfigured && supabase) {
         const { data } = await supabase.from('reports').select('messages, needs_action').eq('id', reportId).maybeSingle();
         if (data) {
@@ -434,26 +441,14 @@ const App: React.FC = () => {
           currentNeedsAction = data.needs_action || false;
         }
       }
-
       const newMessage: ReportMessage = { 
-        id: generateUniqueId('msg'), 
-        senderId: currentUser.id, 
-        senderName: currentUser.name, 
-        senderRole: currentUser.role, 
-        text, 
-        timestamp: new Date().toLocaleTimeString('ja-JP') 
+        id: generateUniqueId('msg'), senderId: currentUser.id, senderName: currentUser.name, senderRole: currentUser.role, 
+        text, timestamp: new Date().toLocaleTimeString('ja-JP') 
       };
-      
       const updatedMessages = [...currentMessages, newMessage];
       const shouldNeedAction = currentUser.role === 'student' || currentUser.role === 'parent';
-      
-      await handleUpdateReport(reportId, { 
-        messages: updatedMessages, 
-        needsAction: shouldNeedAction ? true : currentNeedsAction 
-      });
-    } finally {
-      endUpdate();
-    }
+      await handleUpdateReport(reportId, { messages: updatedMessages, needsAction: shouldNeedAction ? true : currentNeedsAction });
+    } finally { endUpdate(); }
   };
 
   const handleDeleteReportMessage = async (reportId: string, messageId: string) => {
@@ -464,11 +459,8 @@ const App: React.FC = () => {
         const { data } = await supabase.from('reports').select('messages').eq('id', reportId).maybeSingle();
         if (data) currentMessages = data.messages || [];
       }
-      const updatedMessages = currentMessages.filter(m => m.id !== messageId);
-      await handleUpdateReport(reportId, { messages: updatedMessages });
-    } finally {
-      endUpdate();
-    }
+      await handleUpdateReport(reportId, { messages: currentMessages.filter(m => m.id !== messageId) });
+    } finally { endUpdate(); }
   };
 
   const handleUpdateTimetable = async (newTimetable: TimetableEntry[]) => {
@@ -477,15 +469,19 @@ const App: React.FC = () => {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('timetable').delete().neq('id', 'temp_id_flush_preventer');
         const insertData = newTimetable.map(t => ({
-          id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
-          subject: t.subject, student_id: t.studentId, instructor_id: t.instructorId, room: t.room
+          id: t.id, 
+          day_of_week: t.dayOfWeek, 
+          start_time: t.startTime, 
+          end_time: t.endTime,
+          subject: t.subject, 
+          student_id: t.studentId, 
+          instructor_id: t.instructorId, 
+          room: t.room
         }));
         if (insertData.length > 0) await supabase.from('timetable').insert(insertData);
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleAddInstructor = async (d: Omit<Instructor, 'id'>) => {
@@ -493,12 +489,16 @@ const App: React.FC = () => {
     try {
       const id = generateUniqueId('i');
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('instructors').insert({ id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password });
+        await supabase.from('instructors').insert({ 
+          id, 
+          name: d.name, 
+          specialty: d.specialty, 
+          login_id: d.loginId, 
+          password: d.password 
+        });
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleUpdateInstructor = async (id: string, upd: Partial<Instructor>) => {
@@ -513,47 +513,61 @@ const App: React.FC = () => {
         await supabase.from('instructors').update(dbUpd).eq('id', id);
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleDeleteInstructor = async (id: string) => {
     startUpdate();
     try {
-      // 楽観的更新
-      setInstructors(prev => prev.filter(i => i.id !== id));
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('instructors').delete().eq('id', id);
+        const { data: latestStudents } = await supabase.from('students').select('id, instructor_ids');
+        const studentUpdates = (latestStudents || [])
+          .filter(s => (s.instructor_ids || []).includes(id))
+          .map(s => {
+            const newIds = (s.instructor_ids || []).filter((iid: string) => iid !== id);
+            return supabase.from('students').update({ instructor_ids: newIds }).eq('id', s.id);
+          });
+        
+        await Promise.all([
+          supabase.from('instructors').delete().eq('id', id),
+          supabase.from('timetable').delete().eq('instructor_id', id),
+          supabase.from('report_drafts').delete().eq('instructor_id', id),
+          ...studentUpdates
+        ]);
+
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleAddMockExam = async (e: MockExam) => {
     startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('mock_exams').insert({ id: e.id, student_id: e.studentId, exam_name: e.examName, exam_date: e.examDate, scores: e.scores });
+        await supabase.from('mock_exams').insert({ 
+          id: e.id, 
+          student_id: e.studentId, 
+          exam_name: e.examName, 
+          exam_date: e.examDate, 
+          scores: e.scores 
+        });
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleUpdateMockExam = async (e: MockExam) => {
     startUpdate();
     try {
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('mock_exams').update({ exam_name: e.examName, exam_date: e.examDate, scores: e.scores }).eq('id', e.id);
+        await supabase.from('mock_exams').update({ 
+          exam_name: e.examName, 
+          exam_date: e.examDate, 
+          scores: e.scores 
+        }).eq('id', e.id);
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleDeleteMockExam = async (id: string) => {
@@ -563,9 +577,7 @@ const App: React.FC = () => {
         await supabase.from('mock_exams').delete().eq('id', id);
         await fetchAllData(true);
       }
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleSaveIQ = async (score: number, breakdown: any, analysis: string) => {
@@ -581,9 +593,7 @@ const App: React.FC = () => {
         id: generateUniqueId('iq'), date: getLocalISOString(), score, estimatedIQ: Math.round(100 + (score - 50) * 0.8), breakdown, aiAnalysis: analysis
       };
       await handleUpdateStudent(currentUser.id, { iqHistory: [newIQ, ...latestHistory] });
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const handleUpdateWordKingBest = async (newScore: number) => {
@@ -596,30 +606,20 @@ const App: React.FC = () => {
         if (data) currentBest = data.word_king_best || 0;
       }
       if (newScore > currentBest) await handleUpdateStudent(currentUser.id, { wordKingBest: newScore });
-    } finally {
-      endUpdate();
-    }
+    } finally { endUpdate(); }
   };
 
   const renderContent = () => {
     const activeStudent = students.find(s => s.id === currentUser.id);
     switch (activeTab) {
-      case 'dashboard': 
-        return <Dashboard reports={reports} students={students} instructors={instructors} role={currentUser.role} mockExams={mockExams} currentUserStudent={activeStudent} currentUserId={currentUser.id} allSessions={allSessions} onLogSession={handleLogSession} timetable={timetable} onUpdateTimetable={handleUpdateTimetable} onUpdateStudent={handleUpdateStudent} />;
-      case 'create': 
-        return <ReportForm students={students} currentUser={currentUser} onSave={handleSaveReport} />;
-      case 'reports': 
-        return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} />;
-      case 'word-king': 
-        return <WordKing classroomBest={adminConfig.wordKingClassroomRecord} classroomHolder={adminConfig.wordKingClassroomHolder} userId={currentUser.id} personalBestFromDB={activeStudent?.wordKingBest || 0} onPersonalBestUpdate={handleUpdateWordKingBest} onNewClassroomRecord={(record, holder) => handleUpdateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder })} />;
-      case 'iq-test': 
-        return <IQTest studentName={currentUser.name} grade={activeStudent?.grade || ""} userId={currentUser.id} iqHistory={activeStudent?.iqHistory || []} onComplete={handleSaveIQ} />;
-      case 'interview': 
-        return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
-      case 'students': 
-        return <StudentCenter students={students} reports={reports} allSessions={allSessions} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
-      case 'instructors':
-        return <InstructorCenter instructors={instructors} students={students} onAssignStudent={async (sid, iid) => {
+      case 'dashboard': return <Dashboard reports={reports} students={students} instructors={instructors} role={currentUser.role} mockExams={mockExams} currentUserStudent={activeStudent} currentUserId={currentUser.id} allSessions={allSessions} onLogSession={handleLogSession} timetable={timetable} onUpdateTimetable={handleUpdateTimetable} onUpdateStudent={handleUpdateStudent} />;
+      case 'create': return <ReportForm students={students} currentUser={currentUser} onSave={handleSaveReport} />;
+      case 'reports': return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} />;
+      case 'word-king': return <WordKing classroomBest={adminConfig.wordKingClassroomRecord} classroomHolder={adminConfig.wordKingClassroomHolder} userId={currentUser.id} personalBestFromDB={activeStudent?.wordKingBest || 0} onPersonalBestUpdate={handleUpdateWordKingBest} onNewClassroomRecord={(record, holder) => handleUpdateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder })} />;
+      case 'iq-test': return <IQTest studentName={currentUser.name} grade={activeStudent?.grade || ""} userId={currentUser.id} iqHistory={activeStudent?.iqHistory || []} onComplete={handleSaveIQ} />;
+      case 'interview': return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
+      case 'students': return <StudentCenter students={students} reports={reports} allSessions={allSessions} instructors={instructors} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
+      case 'instructors': return <InstructorCenter instructors={instructors} students={students} onAssignStudent={async (sid, iid) => {
           let currentIds: string[] = [];
           if (isSupabaseConfigured && supabase) {
             const { data } = await supabase.from('students').select('instructor_ids').eq('id', sid).maybeSingle();
@@ -635,8 +635,7 @@ const App: React.FC = () => {
           await handleUpdateStudent(sid, { instructorIds: currentIds.filter(id => id !== iid) });
         }} onUpdateInstructor={handleUpdateInstructor} onAddInstructor={handleAddInstructor} onDeleteInstructor={handleDeleteInstructor} />;
       case 'salary': return <SalaryCenter instructors={instructors} reports={reports} />;
-      case 'mock':
-        return <MockExamCenter students={students} mockExams={mockExams} role={currentUser.role} currentUserId={currentUser.id} onSave={handleAddMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />;
+      case 'mock': return <MockExamCenter students={students} mockExams={mockExams} role={currentUser.role} currentUserId={currentUser.id} onSave={handleAddMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />;
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={handleUpdateTimetable} />;
       case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} />;
@@ -663,7 +662,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 2.7.0</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.0.0</p>
       </div>
     </div>
   );
