@@ -170,12 +170,11 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // 初期化フリーズ回避用のタイムアウト設定
   useEffect(() => {
     fetchAllData();
     const safetyNet = setTimeout(() => {
       setIsLoading(false);
-    }, 3000); // 3秒で強制的にローディング解除
+    }, 3000); 
     return () => clearTimeout(safetyNet);
   }, [fetchAllData]);
 
@@ -184,7 +183,7 @@ const App: React.FC = () => {
     
     let channel: any;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase.channel('db-sync-v3.1.1')
+      channel = supabase.channel('db-sync-v3.1.2')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
           if (!isUpdatingRef.current) fetchAllData(true);
         })
@@ -289,12 +288,13 @@ const App: React.FC = () => {
     startUpdate();
     try {
       const id = generateUniqueId('s');
+      const newStd: Student = { ...d, id, instructorIds: [] };
+      setStudents(prev => [...prev, newStd]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('students').insert({ 
           id, name: d.name, grade: d.grade, login_id: d.loginId, password: d.password, 
           target_school: d.targetSchool, target_faculty: d.targetFaculty 
         });
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -302,13 +302,22 @@ const App: React.FC = () => {
   const handleDeleteStudent = async (id: string) => {
     startUpdate();
     try {
+      // ローカルステートを即時更新して同期不具合を防ぐ
+      setStudents(prev => prev.filter(s => s.id !== id));
+      setReports(prev => prev.filter(r => r.studentId !== id));
+      setAllSessions(prev => prev.filter(s => s.studentId !== id));
+      setTimetable(prev => prev.filter(t => t.studentId !== id));
+      setMockExams(prev => prev.filter(m => m.studentId !== id));
+
       if (isSupabaseConfigured && supabase) {
         await Promise.all([
           supabase.from('students').delete().eq('id', id),
           supabase.from('report_drafts').delete().eq('student_id', id),
-          supabase.from('study_sessions').delete().eq('student_id', id)
+          supabase.from('study_sessions').delete().eq('student_id', id),
+          supabase.from('reports').delete().eq('student_id', id),
+          supabase.from('timetable').delete().eq('student_id', id),
+          supabase.from('mock_exams').delete().eq('student_id', id)
         ]);
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -316,11 +325,11 @@ const App: React.FC = () => {
   const handleLogSession = async (session: StudySession) => {
     startUpdate();
     try {
+      setAllSessions(prev => [...prev, session]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('study_sessions').insert({
           id: session.id, student_id: session.studentId, date: session.date, subject: session.subject, minutes: session.minutes
         });
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -328,6 +337,7 @@ const App: React.FC = () => {
   const handleSaveReport = async (report: Report) => {
     startUpdate();
     try {
+      setReports(prev => [report, ...prev]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('reports').insert({
           id: report.id, student_id: report.studentId, date: report.date, subject: report.subject, instructor_name: report.instructorName,
@@ -337,7 +347,6 @@ const App: React.FC = () => {
           generated_content: report.generatedContent, quiz_score: report.quizScore, messages: report.messages || [], 
           needs_action: report.needsAction || false
         });
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -417,11 +426,12 @@ const App: React.FC = () => {
     startUpdate();
     try {
       const id = generateUniqueId('i');
+      const newIns: Instructor = { ...d, id };
+      setInstructors(prev => [...prev, newIns]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('instructors').insert({ 
           id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password 
         });
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -444,13 +454,21 @@ const App: React.FC = () => {
   const handleDeleteInstructor = async (id: string) => {
     startUpdate();
     try {
+      // ローカルステートを即時更新
+      setInstructors(prev => prev.filter(i => i.id !== id));
+      setTimetable(prev => prev.filter(t => t.instructorId !== id));
+      // 担当生徒の紐付けも解除
+      setStudents(prev => prev.map(s => ({
+        ...s,
+        instructorIds: (s.instructorIds || []).filter(iid => iid !== id)
+      })));
+
       if (isSupabaseConfigured && supabase) {
         await Promise.all([
           supabase.from('instructors').delete().eq('id', id),
           supabase.from('timetable').delete().eq('instructor_id', id),
           supabase.from('report_drafts').delete().eq('instructor_id', id)
         ]);
-        await fetchAllData(true);
       }
     } finally { endUpdate(); }
   };
@@ -557,7 +575,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.1.1</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.1.2</p>
       </div>
     </div>
   );
