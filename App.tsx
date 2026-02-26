@@ -124,12 +124,13 @@ const App: React.FC = () => {
       const validInstructorIds = new Set((instructorData || []).map(i => i.id));
       const validStudentIds = new Set((studentData || []).map(s => s.id));
 
-      const latestInstructors: Instructor[] = (instructorData || []).map(i => ({ 
-        id: i.id, name: i.name, specialty: i.specialty, 
-        loginId: i.login_id ?? i.loginId, 
-        password: i.password 
-      }));
-      setInstructors(latestInstructors.length > 0 ? latestInstructors : MOCK_INSTRUCTORS);
+      if (instructorData) {
+        setInstructors(instructorData.map(i => ({ 
+          id: i.id, name: i.name, specialty: i.specialty, 
+          loginId: i.login_id ?? i.loginId, 
+          password: i.password 
+        })));
+      }
       
       if (studentData) {
         setStudents(studentData.map(s => {
