@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Instructor, Student } from '../types';
 
 interface InstructorCenterProps {
@@ -32,23 +32,24 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
 
   const [addFormData, setAddFormData] = useState({ name: '', specialty: '数学・理科', loginId: '', password: '' });
 
-  const selectedInstructor = instructors.find(i => i.id === selectedInstructorId);
+  const selectedInstructor = useMemo(() => instructors.find(i => i.id === selectedInstructorId), [instructors, selectedInstructorId]);
   
-  // 講師が削除された場合に選択状態をクリアする
+  // 重要：同期による削除への追従ロジック
+  // 選択中の講師がリストから消えた場合、選択を解除する
   useEffect(() => {
-    if (selectedInstructorId && !selectedInstructor) {
+    if (selectedInstructorId && !instructors.some(i => i.id === selectedInstructorId)) {
       setSelectedInstructorId(null);
       setIsEditing(false);
     }
-  }, [instructors, selectedInstructorId, selectedInstructor]);
+  }, [instructors, selectedInstructorId]);
 
-  const assignedStudents = selectedInstructorId 
+  const assignedStudents = useMemo(() => selectedInstructorId 
     ? students.filter(s => (s.instructorIds || []).includes(selectedInstructorId))
-    : [];
+    : [], [students, selectedInstructorId]);
   
-  const availableStudents = selectedInstructorId
+  const availableStudents = useMemo(() => selectedInstructorId
     ? students.filter(s => !(s.instructorIds || []).includes(selectedInstructorId))
-    : [];
+    : [], [students, selectedInstructorId]);
 
   const handleStartEdit = () => {
     if (!selectedInstructor) return;
@@ -83,7 +84,6 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
     if (!selectedInstructorId || !onDeleteInstructor) return;
     if (window.confirm(`${editName} 講師の情報を完全に削除しますか？担当生徒の紐付けも解除されます。`)) {
       onDeleteInstructor(selectedInstructorId);
-      // 削除後のUIリセットは useEffect がハンドルする
     }
   };
 

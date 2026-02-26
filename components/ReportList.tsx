@@ -36,7 +36,7 @@ const ReportList: React.FC<ReportListProps> = ({
   const [filterMonth, setFilterMonth] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
 
-  const getStudentName = (id: string) => students.find(s => s.id === id)?.name || '不明';
+  const getStudentName = (id: string) => students.find(s => s.id === id)?.name || '削除された生徒';
   const isPrivileged = currentUser.role === 'instructor' || currentUser.role === 'admin';
 
   const availableMonths = useMemo(() => {
@@ -291,7 +291,6 @@ const ReportList: React.FC<ReportListProps> = ({
                  </div>
               </section>
 
-              {/* 日割りタイムライン：黒網掛けを廃止し、清潔な白×インディゴデザインへ */}
               <section className="bg-white p-6 md:p-10 rounded-[1.5rem] md:rounded-[3rem] shadow-sm border border-slate-100 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-600/20"></div>
                 <h4 className="text-sm md:text-base font-black text-slate-800 mb-8 flex items-center gap-4 relative z-10">

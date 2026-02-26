@@ -14,6 +14,9 @@ export interface Student {
   password?: string;
   iqHistory?: IQResult[]; // IQテスト履歴
   wordKingBest?: number; // 英単語王のパーソナルベスト
+  studyPlusId?: string; // StudyPlus連携用ID
+  studyPlusMinutes?: Record<string, Record<string, number>>; // 日付ごとのStudyPlus学習時間 (YYYY-MM-DD -> { subject -> minutes })
+  studyPlusLastSynced?: string; // 最終同期日時
   targets?: {
     label1: string;
     date1: string;

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { TimetableEntry, Student, Instructor } from '../types';
 import { generateUniqueId } from '../utils';
 
@@ -7,7 +7,7 @@ interface TimetableManagerProps {
   timetable: TimetableEntry[];
   students: Student[];
   instructors: Instructor[];
-  onUpdate: (newTimetable: TimetableEntry[]) => void;
+  onUpdate: (newTimetable: TimetableEntry[], deletedIds?: string[]) => void;
 }
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
@@ -20,9 +20,10 @@ const SUBJECTS = ['数学', '英語', '国語', '理科', '社会', 'その他']
 const ROOMS = ['A教室', 'B教室', 'C教室', 'D教室', '自習室'];
 
 export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, students, instructors, onUpdate }) => {
-  
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+
   const handleAdd = (day: number) => {
-    // 全ての項目を空文字にする
     const newEntry: TimetableEntry = {
       id: generateUniqueId('t'),
       dayOfWeek: day,
@@ -37,15 +38,42 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
   };
 
   const handleRemove = (id: string, e: React.MouseEvent) => {
-    // 重要な修正：イベントの伝播を完全に止め、確実に削除を実行する
     e.preventDefault();
     e.stopPropagation();
+    if (!window.confirm('この授業枠を削除しますか？')) return;
+    
+    setDeletedIds(prev => [...prev, id]);
     const nextTimetable = timetable.filter(t => t.id !== id);
     onUpdate(nextTimetable);
   };
 
   const handleEdit = (id: string, updates: Partial<TimetableEntry>) => {
     onUpdate(timetable.map(t => t.id === id ? { ...t, ...updates } : t));
+  };
+
+  /**
+   * 厳密なバリデーション付き保存
+   */
+  const handleSaveAll = async () => {
+    // 1. バリデーションチェック
+    const incompleteEntries = timetable.filter(t => 
+      !t.studentId || !t.instructorId || !t.startTime || !t.endTime || !t.subject
+    );
+
+    if (incompleteEntries.length > 0) {
+      alert('未入力の項目がある授業枠があります。全ての項目を埋めるか、不要な枠を削除してから保存してください。');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onUpdate(timetable, deletedIds);
+      setDeletedIds([]);
+    } catch (e) {
+      console.error("Save Error", e);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const selectBaseStyle = "w-full bg-white border-2 border-slate-100 rounded-xl px-3 py-2 text-[14px] font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm appearance-none cursor-pointer relative z-10";
@@ -56,8 +84,18 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">時間割管理</h2>
-          <p className="text-slate-500 font-medium">＋で追加、右上の赤い×で削除できます。</p>
+          <p className="text-slate-500 font-medium">編集内容は右下の「変更を確定して保存」で反映されます。</p>
         </div>
+        <button 
+          onClick={handleSaveAll}
+          disabled={isSaving}
+          className={`fixed bottom-8 right-8 z-[200] px-10 py-5 rounded-[2rem] font-black text-white shadow-2xl transition-all active:scale-95 flex items-center gap-3 ${isSaving ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+        >
+          {isSaving ? (
+            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          ) : '💾'}
+          変更を確定して保存
+        </button>
       </header>
 
       <div className="flex overflow-x-auto pb-8 gap-5 snap-x custom-scrollbar -mx-4 px-4">
@@ -78,7 +116,6 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
               {timetable.filter(t => t.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime)).map(item => (
                 <div key={item.id} className="bg-white p-6 rounded-[2.2rem] border border-slate-200 shadow-md relative group transition-all border-l-8 border-l-indigo-500">
                    
-                   {/* 削除ボタン：z-indexを100にして最前面に。絶対位置固定。 */}
                    <button 
                      type="button"
                      onClick={(e) => handleRemove(item.id, e)} 
@@ -88,7 +125,6 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                      <span className="text-xl font-black">✕</span>
                    </button>
 
-                   {/* 時間設定 */}
                    <div className="grid grid-cols-2 gap-4 mb-5">
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-slate-400 uppercase ml-1">開始</label>
@@ -110,7 +146,6 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                       </div>
                    </div>
 
-                   {/* 科目・教室 */}
                    <div className="grid grid-cols-2 gap-3 mb-4">
                      <div className="space-y-1.5">
                        <label className="text-[10px] font-black text-indigo-400 uppercase ml-1">科目</label>
@@ -136,7 +171,6 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                      </div>
                    </div>
 
-                   {/* 生徒・講師 */}
                    <div className="space-y-4">
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-slate-400 uppercase ml-1">生徒名</label>

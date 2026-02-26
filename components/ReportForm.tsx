@@ -11,7 +11,6 @@ interface ReportFormProps {
   onSave: (report: Report) => void;
 }
 
-const DAYS_OF_WEEK = ['月', '火', '水', '木', '金', '土', '日'];
 const SESSION_PERIOD_TAGS = ['夏期', '冬期', '春期', '追加', '体験', '振替'];
 const SESSION_INSTANCE_ID = generateUniqueId('inst');
 
@@ -33,116 +32,100 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedPreview, setGeneratedPreview] = useState<Report['generatedContent'] | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'saving' | 'offline'>('synced');
 
   const draftValuesRef = useRef({
-    subject: '',
-    rawNotes: '',
-    homeworkAssigned: '',
-    attendanceStatus: 'present' as AttendanceStatus,
-    homeworkCompletion: 100,
-    proposedSelfStudyDays: [] as string[],
-    quizScore: '' as number | '',
-    sessionYear: now.getFullYear(),
-    sessionMonth: (now.getMonth() + 1) as number | string,
-    sessionCount: 1,
-    interactionCount: 0
+    subject, rawNotes, homeworkAssigned, attendanceStatus, homeworkCompletion,
+    proposedSelfStudyDays, quizScore, sessionYear, sessionMonth, sessionCount
   });
 
-  const draftTimerRef = useRef<number | null>(null);
-  const lastSyncTimeRef = useRef<number>(0);
-  const isUserInteractingRef = useRef<boolean>(false);
-  const isSavingRef = useRef<boolean>(false); 
-  const isDirtyRef = useRef<boolean>(false); 
-  const interactionTimerRef = useRef<number | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
 
-  const handleInteraction = (field: keyof typeof draftValuesRef.current, value: any, setter?: (val: any) => void) => {
-    isUserInteractingRef.current = true;
-    isDirtyRef.current = true;
-    draftValuesRef.current.interactionCount++;
+  // 1. 各項目の反映と「クラウドへの自動保存」のトリガー
+  const handleInteraction = (field: string, value: any, setter: (val: any) => void) => {
+    setter(value);
     (draftValuesRef.current as any)[field] = value;
-    if (setter) setter(value);
-    
+    setSyncStatus('saving');
+
+    // ローカル保存（即時）
     if (selectedStudentId) {
-      const draftToStore = { ...draftValuesRef.current, updatedAt: Date.now(), instanceId: SESSION_INSTANCE_ID };
-      localStorage.setItem(`report_draft_${selectedStudentId}`, JSON.stringify(draftToStore));
+      localStorage.setItem(`report_draft_${selectedStudentId}`, JSON.stringify({
+        ...draftValuesRef.current,
+        updatedAt: Date.now(),
+        instanceId: SESSION_INSTANCE_ID
+      }));
     }
-    
-    if (interactionTimerRef.current) window.clearTimeout(interactionTimerRef.current);
-    interactionTimerRef.current = window.setTimeout(() => { isUserInteractingRef.current = false; }, 1500); 
+
+    // クラウド保存（デバウンス2秒）
+    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = window.setTimeout(async () => {
+      if (selectedStudentId && isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('report_drafts').upsert({
+            student_id: selectedStudentId,
+            instructor_id: currentUser.id,
+            data: draftValuesRef.current,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'student_id,instructor_id' });
+          setSyncStatus('synced');
+        } catch (e) {
+          setSyncStatus('offline');
+        }
+      } else {
+        setSyncStatus('synced');
+      }
+    }, 2000);
   };
 
-  const resetFields = () => {
-    const defaultVals = {
-      subject: '', rawNotes: '', homeworkAssigned: '', attendanceStatus: 'present' as AttendanceStatus,
-      homeworkCompletion: 100, proposedSelfStudyDays: [], quizScore: '' as number | '', 
-      sessionYear: now.getFullYear(), sessionMonth: now.getMonth() + 1, sessionCount: 1, interactionCount: 0
-    };
-    draftValuesRef.current = defaultVals;
-    setSubject(defaultVals.subject);
-    setRawNotes(defaultVals.rawNotes);
-    setHomeworkAssigned(defaultVals.homeworkAssigned);
-    setAttendanceStatus(defaultVals.attendanceStatus);
-    setHomeworkCompletion(defaultVals.homeworkCompletion);
-    setProposedSelfStudyDays(defaultVals.proposedSelfStudyDays);
-    setQuizScore(defaultVals.quizScore);
-    setSessionYear(defaultVals.sessionYear);
-    setSessionMonth(defaultVals.sessionMonth);
-    setSessionCount(defaultVals.sessionCount);
-    setGeneratedPreview(null);
-    isDirtyRef.current = false;
-    isSavingRef.current = false;
-  };
-
+  // 2. クラウド下書きの読み込み（確実な同期）
   useEffect(() => {
-    let isIgnore = false;
     if (!selectedStudentId) return;
 
-    const loadLatestDraft = async () => {
+    const syncDraft = async () => {
       let localDraft: any = null;
-      let cloudDraft: any = null;
-      const localDraftStr = localStorage.getItem(`report_draft_${selectedStudentId}`);
-      if (localDraftStr) localDraft = JSON.parse(localDraftStr);
+      const localStr = localStorage.getItem(`report_draft_${selectedStudentId}`);
+      if (localStr) localDraft = JSON.parse(localStr);
 
       if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from('report_drafts').select('data, updated_at').eq('student_id', selectedStudentId).eq('instructor_id', currentUser.id).maybeSingle();
-        if (data?.data) cloudDraft = { ...data.data, updatedAt: new Date(data.updated_at).getTime() };
-      }
-      if (isIgnore) return;
+        const { data } = await supabase.from('report_drafts')
+          .select('data, updated_at')
+          .eq('student_id', selectedStudentId)
+          .eq('instructor_id', currentUser.id)
+          .maybeSingle();
 
-      const finalDraft = (!localDraft && !cloudDraft) ? null : (!localDraft) ? cloudDraft : (!cloudDraft) ? localDraft : ((cloudDraft.updatedAt || 0) > (localDraft.updatedAt || 0)) ? cloudDraft : localDraft;
+        if (data) {
+          const cloudTime = new Date(data.updated_at).getTime();
+          const localTime = localDraft?.updatedAt || 0;
 
-      if (finalDraft) {
-        draftValuesRef.current = {
-          subject: finalDraft.subject || '',
-          rawNotes: finalDraft.rawNotes || '',
-          homeworkAssigned: finalDraft.homeworkAssigned || '',
-          attendanceStatus: finalDraft.attendanceStatus || 'present',
-          homeworkCompletion: finalDraft.homeworkCompletion ?? 100,
-          proposedSelfStudyDays: finalDraft.proposedSelfStudyDays || [],
-          quizScore: finalDraft.quizScore ?? '',
-          sessionYear: finalDraft.sessionYear || now.getFullYear(),
-          sessionMonth: finalDraft.sessionMonth || (now.getMonth() + 1),
-          sessionCount: finalDraft.sessionCount || 1,
-          interactionCount: finalDraft.interactionCount || 0
-        };
-        setSubject(draftValuesRef.current.subject);
-        setRawNotes(draftValuesRef.current.rawNotes);
-        setHomeworkAssigned(draftValuesRef.current.homeworkAssigned);
-        setAttendanceStatus(draftValuesRef.current.attendanceStatus);
-        setHomeworkCompletion(draftValuesRef.current.homeworkCompletion);
-        setProposedSelfStudyDays(draftValuesRef.current.proposedSelfStudyDays);
-        setQuizScore(draftValuesRef.current.quizScore);
-        setSessionYear(draftValuesRef.current.sessionYear);
-        setSessionMonth(draftValuesRef.current.sessionMonth);
-        setSessionCount(draftValuesRef.current.sessionCount);
-        lastSyncTimeRef.current = finalDraft.updatedAt || Date.now();
-        isDirtyRef.current = false; 
+          // クラウドの方が新しいか、ローカルにデータがない場合のみ上書き
+          if (cloudTime > localTime || !localDraft) {
+            const d = data.data;
+            setSubject(d.subject || '');
+            setRawNotes(d.rawNotes || '');
+            setHomeworkAssigned(d.homeworkAssigned || '');
+            setAttendanceStatus(d.attendanceStatus || 'present');
+            setHomeworkCompletion(d.homeworkCompletion ?? 100);
+            setQuizScore(d.quizScore ?? '');
+            setSessionYear(d.sessionYear || now.getFullYear());
+            setSessionMonth(d.sessionMonth || (now.getMonth() + 1));
+            setSessionCount(d.sessionCount || 1);
+            draftValuesRef.current = d;
+          }
+        }
       }
     };
-    loadLatestDraft();
+    syncDraft();
   }, [selectedStudentId, currentUser.id]);
 
-  const inputBaseStyle = "w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 font-bold placeholder-slate-400 focus:border-indigo-500 outline-none transition-all";
+  const resetFields = () => {
+    setSubject(''); setRawNotes(''); setHomeworkAssigned(''); setAttendanceStatus('present');
+    setHomeworkCompletion(100); setQuizScore(''); setGeneratedPreview(null);
+    draftValuesRef.current = {
+      subject: '', rawNotes: '', homeworkAssigned: '', attendanceStatus: 'present',
+      homeworkCompletion: 100, proposedSelfStudyDays: [], quizScore: '',
+      sessionYear: now.getFullYear(), sessionMonth: now.getMonth() + 1, sessionCount: 1
+    };
+  };
 
   const handleGenerate = async () => {
     if (!selectedStudentId || !subject || !rawNotes) {
@@ -166,23 +149,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     if (!generatedPreview) return;
     const currentSid = selectedStudentId;
     const newReport: Report = {
-      id: generateUniqueId('rep'),
-      studentId: currentSid,
-      date: getLocalISOString(),
-      subject,
-      instructorName: currentUser.name,
-      sessionYear: Number(sessionYear),
-      sessionMonth,
-      sessionCount,
-      attendanceStatus,
-      homeworkCompletion,
-      proposedSelfStudyDays,
-      rawNotes,
-      homeworkAssigned,
-      generatedContent: generatedPreview,
+      id: generateUniqueId('rep'), studentId: currentSid, date: getLocalISOString(),
+      subject, instructorName: currentUser.name, sessionYear: Number(sessionYear),
+      sessionMonth, sessionCount, attendanceStatus, homeworkCompletion,
+      proposedSelfStudyDays, rawNotes, homeworkAssigned, generatedContent: generatedPreview,
       quizScore: Number(quizScore) || undefined
     };
     onSave(newReport);
+    
+    // 保存後は下書きを削除（確実なクリーンアップ）
     if (isSupabaseConfigured && supabase) {
       await supabase.from('report_drafts').delete().eq('student_id', currentSid).eq('instructor_id', currentUser.id);
     }
@@ -191,11 +166,21 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
     setSelectedStudentId('');
   };
 
+  const inputBaseStyle = "w-full px-4 py-3 rounded-xl border-2 border-slate-200 bg-white text-slate-900 font-bold focus:border-indigo-500 outline-none transition-all";
+
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
-      <header>
-        <h2 className="text-3xl font-black text-slate-800 tracking-tight">指導報告書作成</h2>
-        <p className="text-slate-500 font-medium italic">復元された区分選択機能で、正確な月次・講習管理が可能です</p>
+      <header className="flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-black text-slate-800 tracking-tight">指導報告書作成</h2>
+          <p className="text-slate-500 font-medium italic">作業内容はクラウドに自動保存されます</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-slate-100 shadow-sm">
+          <span className={`w-2 h-2 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500' : syncStatus === 'saving' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`}></span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {syncStatus === 'synced' ? 'Cloud Synced' : syncStatus === 'saving' ? 'Saving...' : 'Offline'}
+          </span>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -207,15 +192,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">対象生徒</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">対象生徒</label>
               <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className={inputBaseStyle}>
                 <option value="">生徒を選択</option>
                 {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">科目</label>
-              <input type="text" placeholder="例: 英語" value={subject} onChange={(e) => handleInteraction('subject', e.target.value, setSubject)} className={inputBaseStyle} />
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">科目</label>
+              <input type="text" placeholder="例: 数学" value={subject} onChange={(e) => handleInteraction('subject', e.target.value, setSubject)} className={inputBaseStyle} />
             </div>
           </div>
 
@@ -223,11 +208,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
              <div className="grid grid-cols-2 gap-4">
                <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">実施年度</label>
-                  <input type="number" value={sessionYear} onChange={(e) => handleInteraction('sessionYear', Number(e.target.value), setSessionYear)} className={inputBaseStyle + " text-center py-2"} />
+                  <input type="number" value={sessionYear} onChange={(e) => handleInteraction('sessionYear', Number(e.target.value), setSessionYear)} className={inputBaseStyle + " text-center"} />
                </div>
                <div>
-                  <label className="block text-[10px] font-black text-indigo-600 uppercase mb-2 ml-1">実施月/期 (重要)</label>
-                  <input type="text" value={sessionMonth} onChange={(e) => handleInteraction('sessionMonth', e.target.value, setSessionMonth)} className={inputBaseStyle + " text-center py-2 border-indigo-200"} placeholder="例: 夏期" />
+                  <label className="block text-[10px] font-black text-indigo-600 uppercase mb-2 ml-1">実施月/期</label>
+                  <input type="text" value={sessionMonth} onChange={(e) => handleInteraction('sessionMonth', e.target.value, setSessionMonth)} className={inputBaseStyle + " text-center border-indigo-200"} />
                </div>
              </div>
              <div className="flex flex-wrap gap-1.5">
@@ -240,9 +225,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
              </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">出席状況</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">出席状況</label>
               <div className="flex gap-1.5">
                 {['present', 'late', 'absent'].map(id => (
                   <button key={id} type="button" onClick={() => handleInteraction('attendanceStatus', id as AttendanceStatus, setAttendanceStatus)} className={`flex-1 py-2.5 rounded-xl font-black text-[11px] transition-all border-2 ${attendanceStatus === id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}>
@@ -252,41 +237,42 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">小テスト</label>
-              <input type="number" value={quizScore} onChange={(e) => handleInteraction('quizScore', e.target.value === '' ? '' : Number(e.target.value), setQuizScore)} className={inputBaseStyle + " text-center py-2.5"} placeholder="点" />
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">小テスト点</label>
+              <input type="number" value={quizScore} onChange={(e) => handleInteraction('quizScore', e.target.value === '' ? '' : Number(e.target.value), setQuizScore)} className={inputBaseStyle + " text-center"} />
             </div>
           </div>
 
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">指導メモ</label>
-            <textarea rows={4} placeholder="授業の様子、理解度、弱点などを入力してください。" value={rawNotes} onChange={(e) => handleInteraction('rawNotes', e.target.value, setRawNotes)} className={inputBaseStyle + " resize-none text-sm"} />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">指導メモ</label>
+              <textarea rows={4} placeholder="授業の様子や弱点を入力..." value={rawNotes} onChange={(e) => handleInteraction('rawNotes', e.target.value, setRawNotes)} className={inputBaseStyle + " resize-none text-sm"} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-indigo-400 uppercase mb-2 ml-1">宿題内容</label>
+              <textarea rows={2} placeholder="宿題の範囲..." value={homeworkAssigned} onChange={(e) => handleInteraction('homeworkAssigned', e.target.value, setHomeworkAssigned)} className={inputBaseStyle + " resize-none text-sm border-indigo-100"} />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 ml-1">宿題内容</label>
-            <textarea rows={2} placeholder="問題集名やページ数..." value={homeworkAssigned} onChange={(e) => handleInteraction('homeworkAssigned', e.target.value, setHomeworkAssigned)} className={inputBaseStyle + " resize-none text-sm border-indigo-100"} />
-          </div>
-
-          <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-4 rounded-2xl font-black text-white transition-all shadow-xl active:scale-95 ${isGenerating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-            {isGenerating ? "AI生成中..." : "✨ AIによる学習計画・アドバイス生成"}
+          <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-5 rounded-2xl font-black text-white transition-all shadow-xl active:scale-95 ${isGenerating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+            {isGenerating ? "AI生成中..." : "✨ AIによる学習計画生成"}
           </button>
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col min-h-[600px]">
           <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-3">
             <span className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-sm shadow-md">2</span>
-            生成内容の確認・確定
+            生成内容の確認
           </h3>
 
           {!generatedPreview ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-300 border-4 border-dashed border-slate-50 rounded-[3rem] bg-slate-50/20">
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-300 border-4 border-dashed border-slate-50 rounded-[3rem]">
               <span className="text-6xl mb-4 grayscale opacity-30">📋</span>
               <p className="font-bold">入力を完了してAI生成を開始してください</p>
             </div>
           ) : (
             <div className="flex-1 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
               <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100">
-                <h4 className="text-[10px] font-black text-indigo-600 uppercase mb-3 tracking-widest">指導内容要約</h4>
+                <h4 className="text-[10px] font-black text-indigo-600 uppercase mb-2 tracking-widest">指導内容要約</h4>
                 <p className="text-sm font-bold leading-relaxed text-slate-700 italic">「{generatedPreview.lessonSummary}」</p>
               </div>
 
@@ -303,7 +289,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
               </div>
 
               <div className="bg-rose-50 p-6 rounded-[2rem] border border-rose-100">
-                <h4 className="text-[10px] font-black text-rose-500 uppercase mb-3 tracking-widest">保護者様への一言</h4>
+                <h4 className="text-[10px] font-black text-rose-500 uppercase mb-2 tracking-widest">保護者様へ</h4>
                 <p className="text-sm font-bold italic text-slate-800 leading-relaxed">「{generatedPreview.messageToParents}」</p>
               </div>
 

@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { Student, Report, UserRole, StudySession, IQResult } from '../types';
-import { FACULTY_OPTIONS } from '../constants';
+import { FACULTY_OPTIONS, SUBJECT_CONFIG } from '../constants';
 import ReportList from './ReportList';
 import { getLocalISOString, parseSafeDate, generateUniqueId } from '../utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
@@ -27,9 +28,18 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId);
-  const studentReports = reports.filter(r => r.studentId === selectedStudentId);
+  const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
+  const studentReports = useMemo(() => reports.filter(r => r.studentId === selectedStudentId), [reports, selectedStudentId]);
   const isAdmin = currentUser.role === 'admin';
+
+  // 重要：同期による削除への追従ロジック
+  // 選択中の生徒がリストから消えた（他デバイスで削除された）場合、選択を解除する
+  useEffect(() => {
+    if (selectedStudentId && !students.some(s => s.id === selectedStudentId)) {
+      setSelectedStudentId(null);
+      setIsEditing(false);
+    }
+  }, [students, selectedStudentId]);
 
   // 統計データの計算
   const stats = useMemo(() => {
@@ -42,12 +52,29 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const mins = sessions.filter(s => s.date === dateStr).reduce((acc, curr) => acc + curr.minutes, 0);
-      last7Days.push({ name: dateStr.split('-').slice(1).join('/'), hours: (mins / 60).toFixed(1) });
+      const entry: any = { 
+        name: dateStr.split('-').slice(1).join('/'),
+        date: dateStr
+      };
+
+      // StudyBaseの科目別集計
+      Object.keys(SUBJECT_CONFIG).forEach(sub => {
+        const mins = sessions.filter(s => s.date === dateStr && s.subject === sub).reduce((acc, curr) => acc + curr.minutes, 0);
+        if (mins > 0) entry[sub] = parseFloat((mins / 60).toFixed(1));
+      });
+
+      // StudyPlusの科目別集計
+      const spDayData = selectedStudent?.studyPlusMinutes?.[dateStr] || {};
+      Object.entries(spDayData).forEach(([sub, mins]) => {
+        const key = `SP_${sub}`;
+        entry[key] = parseFloat((mins / 60).toFixed(1));
+      });
+
+      last7Days.push(entry);
     }
 
     return { last7Days };
-  }, [selectedStudentId, allSessions]);
+  }, [selectedStudentId, allSessions, selectedStudent]);
 
   const inputStyle = "w-full px-5 py-3 rounded-2xl border-2 border-slate-100 bg-white focus:border-indigo-500 outline-none font-bold transition-all";
 
@@ -120,6 +147,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                       <div><label className="text-xs font-black text-slate-400 ml-1">氏名</label><input className={inputStyle} value={selectedStudent.name} onChange={e => onUpdateStudent?.(selectedStudent.id, { name: e.target.value })} /></div>
                       <div><label className="text-xs font-black text-slate-400 ml-1">学年</label><input className={inputStyle} value={selectedStudent.grade} onChange={e => onUpdateStudent?.(selectedStudent.id, { grade: e.target.value })} /></div>
                       <div><label className="text-xs font-black text-slate-400 ml-1">志望校</label><input className={inputStyle} value={selectedStudent.targetSchool} onChange={e => onUpdateStudent?.(selectedStudent.id, { targetSchool: e.target.value })} /></div>
+                      <div><label className="text-xs font-black text-slate-400 ml-1">StudyPlus ID</label><input className={inputStyle} value={selectedStudent.studyPlusId || ''} placeholder="連携用IDを入力" onChange={e => onUpdateStudent?.(selectedStudent.id, { studyPlusId: e.target.value })} /></div>
                       <div>
                         <label className="text-xs font-black text-slate-400 ml-1">志望系統</label>
                         <select className={inputStyle} value={selectedStudent.targetFaculty} onChange={e => onUpdateStudent?.(selectedStudent.id, { targetFaculty: e.target.value })}>
@@ -128,21 +156,143 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                         </select>
                       </div>
                       <div className="md:col-span-2"><label className="text-xs font-black text-slate-400 ml-1">講師へのメッセージ</label><textarea className={inputStyle} rows={3} value={selectedStudent.weeklyInstructorMessage} onChange={e => onUpdateStudent?.(selectedStudent.id, { weeklyInstructorMessage: e.target.value })} /></div>
+                      
+                      <div className="md:col-span-2 bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
+                        <h4 className="text-sm font-black text-emerald-700 mb-4 flex items-center justify-between">
+                          <span className="flex items-center gap-2"><span>📱</span> StudyPlus 連携データ管理</span>
+                          {selectedStudent.studyPlusLastSynced && (
+                            <span className="text-[9px] font-bold text-emerald-500">最終同期: {new Date(selectedStudent.studyPlusLastSynced).toLocaleString('ja-JP')}</span>
+                          )}
+                        </h4>
+                        <div className="space-y-6">
+                          <div>
+                            <p className="text-[10px] font-bold text-emerald-600 mb-2 uppercase">Manual Data Entry (Simulated Sync)</p>
+                            <div className="flex flex-wrap gap-2">
+                              <input type="date" id="sp-date" className="flex-1 min-w-[140px] px-4 py-2 rounded-xl border border-emerald-200 text-sm font-bold outline-none" defaultValue={getLocalISOString()} />
+                              <select id="sp-sub" className="flex-1 min-w-[100px] px-4 py-2 rounded-xl border border-emerald-200 text-sm font-bold outline-none">
+                                {Object.keys(SUBJECT_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                              <div className="relative w-24">
+                                <input type="number" id="sp-mins" placeholder="分" className="w-full px-4 py-2 rounded-xl border border-emerald-200 text-sm font-bold outline-none pr-8" />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">分</span>
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  const date = (document.getElementById('sp-date') as HTMLInputElement).value;
+                                  const sub = (document.getElementById('sp-sub') as HTMLSelectElement).value;
+                                  const mins = parseInt((document.getElementById('sp-mins') as HTMLInputElement).value) || 0;
+                                  if (date && mins > 0) {
+                                    const currentSP = selectedStudent.studyPlusMinutes || {};
+                                    const dayData = currentSP[date] || {};
+                                    onUpdateStudent?.(selectedStudent.id, {
+                                      studyPlusMinutes: { 
+                                        ...currentSP, 
+                                        [date]: { ...dayData, [sub]: (dayData[sub] || 0) + mins }
+                                      }
+                                    });
+                                    alert('StudyPlusデータを反映しました');
+                                  }
+                                }}
+                                className="bg-emerald-600 text-white px-6 py-2 rounded-xl font-black text-xs shadow-md hover:bg-emerald-700 transition-all active:scale-95"
+                              >
+                                反映
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="pt-4 border-t border-emerald-100">
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                if (!selectedStudent.studyPlusId) {
+                                  alert('先にStudyPlus IDを設定してください');
+                                  return;
+                                }
+                                alert(`${selectedStudent.studyPlusId} のデータを同期中... (シミュレーション)`);
+                                // 過去7日間のランダムなデータを生成してシミュレーション
+                                const mockSP: Record<string, Record<string, number>> = { ...selectedStudent.studyPlusMinutes };
+                                const subjects = ['数学', '英語', '国語', '理科', '社会'];
+                                for(let i=0; i<7; i++) {
+                                  const d = new Date();
+                                  d.setDate(d.getDate() - i);
+                                  const ds = d.toISOString().split('T')[0];
+                                  const dayData: Record<string, number> = {};
+                                  subjects.forEach(s => {
+                                    if (Math.random() > 0.3) {
+                                      dayData[s] = Math.floor(Math.random() * 60) + 15;
+                                    }
+                                  });
+                                  mockSP[ds] = dayData;
+                                }
+                                onUpdateStudent?.(selectedStudent.id, { 
+                                  studyPlusMinutes: mockSP,
+                                  studyPlusLastSynced: new Date().toISOString()
+                                });
+                              }}
+                              className="w-full bg-white text-emerald-600 border-2 border-emerald-200 py-4 rounded-2xl font-black text-sm hover:bg-emerald-100 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
+                            >
+                              <span>🔄</span> 一括同期を実行
+                            </button>
+                            <p className="text-[9px] text-emerald-400 mt-2 text-center font-bold">※ StudyPlus IDに紐づく過去7日間の学習データを自動取得します</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-6">
-                        <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">週間学習時間 (h)</h4>
+                        <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center justify-between">
+                          <span>学習時間分析 (h)</span>
+                          <span className="flex items-center gap-3">
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-indigo-600 rounded-full"></span><span className="text-[8px]">Study Base</span></span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span><span className="text-[8px]">StudyPlus</span></span>
+                          </span>
+                        </h4>
                         <div className="h-48">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={stats?.last7Days}>
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                               <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
                               <YAxis fontSize={10} axisLine={false} tickLine={false} />
-                              <Tooltip cursor={{ fill: '#f8fafc' }} />
-                              <Bar dataKey="hours" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                              <Tooltip 
+                                cursor={{ fill: '#f8fafc' }}
+                                contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                              />
+                              {/* StudyBaseの科目別データを描画 */}
+                              {Object.entries(SUBJECT_CONFIG).map(([sub, config]) => (
+                                <Bar key={sub} dataKey={sub} name={sub} fill={config.color} stackId="a" />
+                              ))}
+                              {/* StudyPlusの科目別データを描画 */}
+                              {selectedStudent?.studyPlusMinutes && 
+                                Array.from(new Set(
+                                  Object.values(selectedStudent.studyPlusMinutes).flatMap(subjects => Object.keys(subjects))
+                                )).map(sub => (
+                                  <Bar key={`SP_${sub}`} dataKey={`SP_${sub}`} name={`SP:${sub}`} fill="#10b981" stackId="a" opacity={0.7} />
+                                ))
+                              }
                             </BarChart>
                           </ResponsiveContainer>
+                        </div>
+                        
+                        {/* 科目別内訳のリスト表示 */}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {Array.from(new Set([
+                            ...allSessions.filter(s => s.studentId === selectedStudent.id).map(s => s.subject),
+                            ...Object.values(selectedStudent.studyPlusMinutes || {}).flatMap(subjects => Object.keys(subjects))
+                          ])).map(sub => {
+                            const baseMins = allSessions.filter(s => s.studentId === selectedStudent.id && s.subject === sub).reduce((a, c) => a + c.minutes, 0);
+                            const spMins = Object.values(selectedStudent.studyPlusMinutes || {}).reduce((a, c) => a + (c[sub] || 0), 0);
+                            if (baseMins === 0 && spMins === 0) return null;
+                            
+                            return (
+                              <div key={sub} className="px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: SUBJECT_CONFIG[sub]?.color || '#10b981' }}></span>
+                                <span className="text-[10px] font-bold text-slate-700">{sub}</span>
+                                <span className="text-[10px] font-black text-slate-400">{((baseMins + spMins) / 60).toFixed(1)}h</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                       <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex flex-col justify-center">

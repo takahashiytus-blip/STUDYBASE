@@ -22,11 +22,15 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentResult, setCurrentResult] = useState<IQResult | null>(null);
 
+  // 重要：全デバイス共通の厳密な1日1回制限
   useEffect(() => {
-    const today = getLocalISOString();
-    const hasAttemptedToday = iqHistory.some(res => res.date === today);
-    if (hasAttemptedToday && step === 'start') {
-      setStep('limit');
+    if (step === 'start') {
+      const today = getLocalISOString();
+      // DBから取得した全履歴をスキャンし、今日の日付のデータがあれば制限画面へ
+      const hasAttemptedToday = iqHistory.some(res => res.date === today);
+      if (hasAttemptedToday) {
+        setStep('limit');
+      }
     }
   }, [iqHistory, step]);
 
@@ -83,7 +87,7 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
     const finalScore = Math.min(100, Math.round((totalScore / 150) * 100) + 40);
 
     try {
-      const analysis = await generateIQAnalysis(studentName, grade, finalScore, breakdown);
+      const analysis = await generateIQAnalysis(studentName, grade, finalScore, breakdown) || "分析結果を生成できませんでした。";
       const result: IQResult = {
         id: generateUniqueId('iq'),
         date: getLocalISOString(),
@@ -108,7 +112,8 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
         <div className="text-7xl mb-6">⏳</div>
         <h2 className="text-3xl font-black text-slate-800 mb-4">本日の診断は完了しています</h2>
         <p className="text-slate-500 font-bold mb-8 leading-relaxed">
-          全デバイス共通で「1日1回」限定です。また明日挑戦してください。
+          全デバイス共通で「1日1回」限定です。最新の結果は履歴一覧から確認できます。<br/>
+          明日の再挑戦をお待ちしています。
         </p>
         <button onClick={() => setStep('start')} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-indigo-700 transition-all">履歴一覧へ戻る</button>
       </div>
@@ -225,7 +230,6 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* 黒網掛けを廃止し、清潔な白とindigoのコンビネーションへ */}
           <div className="lg:col-span-5 space-y-8">
             <div className="bg-white p-12 rounded-[3.5rem] shadow-xl border-4 border-indigo-100 text-center relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50"></div>

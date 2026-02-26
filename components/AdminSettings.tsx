@@ -59,6 +59,77 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
       </header>
 
       <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+        <div className="bg-indigo-950 p-8 text-white flex items-center gap-6">
+          <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg">🎨</div>
+          <div>
+            <h3 className="text-xl font-bold">ブランドアセット</h3>
+            <p className="text-indigo-300 text-sm">StudyBaseのロゴやアイコンをダウンロードできます</p>
+          </div>
+        </div>
+        <div className="p-8 md:p-10 space-y-8">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="w-40 h-40 bg-slate-900 rounded-[2rem] flex items-center justify-center p-4 shadow-inner">
+              <img src="/studybase-logo.svg" alt="StudyBase Logo" className="w-full h-full" />
+            </div>
+            <div className="flex-1 space-y-4">
+              <h4 className="text-lg font-black text-slate-800">StudyBase オフィシャルロゴ</h4>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                報告書や掲示物、SNSなどで使用できる公式ロゴデータ（SVG形式）です。拡大しても画質が劣化しません。
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <a 
+                  href="/studybase-logo.svg" 
+                  download="studybase-logo.svg"
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs shadow-lg hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2"
+                >
+                  <span>📥</span> SVG
+                </a>
+                <button 
+                  onClick={() => {
+                    const img = new Image();
+                    const svgUrl = '/studybase-logo.svg';
+                    img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      canvas.width = 1024;
+                      canvas.height = 1024;
+                      const ctx = canvas.getContext('2d');
+                      if (ctx) {
+                        ctx.drawImage(img, 0, 0, 1024, 1024);
+                        const pngUrl = canvas.toDataURL('image/png');
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = pngUrl;
+                        downloadLink.download = 'studybase-logo.png';
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                      }
+                    };
+                    img.src = svgUrl;
+                  }}
+                  className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-black text-xs shadow-lg hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-2"
+                >
+                  <span>🖼️</span> PNG
+                </button>
+                <button 
+                  onClick={() => {
+                    fetch('/studybase-logo.svg')
+                      .then(r => r.text())
+                      .then(text => {
+                        navigator.clipboard.writeText(text);
+                        alert('SVGコードをクリップボードにコピーしました');
+                      });
+                  }}
+                  className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs hover:bg-slate-200 transition-all active:scale-95"
+                >
+                  コードをコピー
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
         <div className="bg-slate-900 p-8 text-white flex items-center gap-6">
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg">🏢</div>
           <div>

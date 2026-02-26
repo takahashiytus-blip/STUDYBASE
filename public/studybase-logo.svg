@@ -1,0 +1,7 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="128" fill="#0F172A"/>
+  <path d="M120 380V180C120 157.909 137.909 140 160 140H320C342.091 140 360 157.909 360 180V240C360 262.091 342.091 280 320 280H160" stroke="#6366F1" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M160 280H320C342.091 280 360 297.909 360 320V340C360 362.091 342.091 380 320 380H160" stroke="#10B981" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="160" cy="280" r="16" fill="white"/>
+  <text x="256" y="460" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="48" fill="white" letter-spacing="4">STUDY BASE</text>
+</svg>

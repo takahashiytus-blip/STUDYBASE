@@ -1,7 +1,18 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Gemini API Key is not set in environment variables.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   let lastError: any;
@@ -31,6 +42,7 @@ export const generateProfessionalReport = async (
   homeworkCompletion?: number
 ) => {
   return withRetry(async () => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `プロの塾講師として保護者向けの報告書をJSON形式で生成してください。
@@ -81,6 +93,7 @@ export const generateIQAnalysis = async (
   breakdown: any
 ) => {
   return withRetry(async () => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `知能・認知特性診断結果を分析してください。
@@ -107,6 +120,7 @@ export const generateInterviewMaterial = async (
   targetFaculty?: string
 ) => {
   return withRetry(async () => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: `生徒「${studentName}」の面談資料を生成。
@@ -171,6 +185,7 @@ export const generateInterviewMaterial = async (
 
 export const validateDisplayName = async (name: string): Promise<{ isValid: boolean; reason?: string }> => {
   return withRetry(async () => {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `名前が適切か判定: "${name}"`,

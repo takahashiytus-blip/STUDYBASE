@@ -44,6 +44,9 @@ const App: React.FC = () => {
     role: 'student', id: '', name: ''
   });
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // トースト通知用
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const [reports, setReports] = useState<Report[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -53,11 +56,34 @@ const App: React.FC = () => {
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(DEFAULT_ADMIN);
 
+  // セッション復元
+  useEffect(() => {
+    const savedUser = localStorage.getItem('study_base_session');
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+      } catch (e) {
+        localStorage.removeItem('study_base_session');
+      }
+    }
+  }, []);
+
   const isUpdatingRef = useRef<boolean>(false);
   const updateTimeoutRef = useRef<number | null>(null);
+  const syncPendingRef = useRef<boolean>(false);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchAllData = useCallback(async (isSilent = false) => {
-    if (isUpdatingRef.current) return;
+    if (isUpdatingRef.current) {
+      syncPendingRef.current = true;
+      return;
+    }
 
     if (!isSupabaseConfigured || !supabase) {
       if (!isSilent) {
@@ -90,118 +116,114 @@ const App: React.FC = () => {
         supabase.from('students').select('*'),
         supabase.from('instructors').select('*'),
         supabase.from('reports').select('*').order('date', { ascending: false }),
-        supabase.from('mock_exams').select('*'),
+        supabase.from('mock_exams').select('*').order('exam_date', { ascending: false }),
         supabase.from('timetable').select('*'),
-        supabase.from('study_sessions').select('*')
+        supabase.from('study_sessions').select('*').order('date', { ascending: false })
       ]);
 
-      // 1. マスターIDセットの確立（サニタイズの基準）
       const validInstructorIds = new Set((instructorData || []).map(i => i.id));
       const validStudentIds = new Set((studentData || []).map(s => s.id));
 
       const latestInstructors: Instructor[] = (instructorData || []).map(i => ({ 
         id: i.id, name: i.name, specialty: i.specialty, 
-        loginId: i.loginId || i.login_id, 
+        loginId: i.login_id ?? i.loginId, 
         password: i.password 
       }));
       setInstructors(latestInstructors.length > 0 ? latestInstructors : MOCK_INSTRUCTORS);
       
-      // 2. 各テーブルの取得時サニタイズ（幽霊データの自動排除）
-      if (studentData && studentData.length > 0) {
+      if (studentData) {
         setStudents(studentData.map(s => {
-          // 生徒情報のサニタイズ：削除済み講師IDを配列から除去
-          const rawIds = Array.isArray(s.instructor_ids) ? s.instructor_ids : (s.instructorIds || []);
+          const rawIds = s.instructor_ids ?? s.instructorIds ?? [];
           const cleanInstructorIds = rawIds.filter((id: string) => validInstructorIds.has(id));
-
           return {
             id: s.id, name: s.name, grade: s.grade, 
-            loginId: s.loginId || s.login_id, 
+            loginId: s.login_id ?? s.loginId, 
             password: s.password,
-            targetSchool: s.targetSchool || s.target_school, 
-            targetFaculty: s.targetFaculty || s.target_faculty,
-            weeklyInstructorMessage: s.weeklyInstructorMessage || s.weekly_instructor_message, 
+            targetSchool: s.target_school ?? s.targetSchool, 
+            targetFaculty: s.target_faculty ?? s.targetFaculty,
+            weeklyInstructorMessage: s.weekly_instructor_message ?? s.weeklyInstructorMessage, 
             instructorIds: cleanInstructorIds,
-            iqHistory: s.iq_history || s.iqHistory || [],
-            wordKingBest: s.word_king_best || s.wordKingBest || 0,
-            targets: s.targets || undefined
+            iqHistory: s.iq_history ?? s.iqHistory ?? [],
+            wordKingBest: s.word_king_best ?? s.wordKingBest ?? 0,
+            studyPlusId: s.study_plus_id ?? s.studyPlusId,
+            studyPlusMinutes: s.study_plus_minutes ?? s.studyPlusMinutes ?? {},
+            studyPlusLastSynced: s.study_plus_last_synced ?? s.studyPlusLastSynced,
+            targets: s.targets ?? undefined
           };
         }));
-      } else {
-        setStudents(MOCK_STUDENTS);
       }
 
       if (adminData) {
         setAdminConfig({
-          id: adminData.id, 
-          name: adminData.name, 
-          loginId: adminData.login_id || adminData.loginId,
-          passwordHash: adminData.password_hash || adminData.passwordHash || DEFAULT_ADMIN.passwordHash,
+          id: adminData.id, name: adminData.name, 
+          loginId: adminData.login_id ?? adminData.loginId,
+          passwordHash: adminData.password_hash ?? adminData.passwordHash ?? DEFAULT_ADMIN.passwordHash,
           location: adminData.location, 
           wordKingClassroomRecord: adminData.word_king_record ?? adminData.wordKingClassroomRecord ?? 0,
-          wordKingClassroomHolder: adminData.word_king_holder || adminData.wordKingClassroomHolder || '---'
+          wordKingClassroomHolder: adminData.word_king_holder ?? adminData.wordKingClassroomHolder ?? '---'
         });
       }
 
       if (reportData) {
-        // 報告書のサニタイズ：削除済み生徒のデータは隠す
         setReports(reportData
-          .filter(r => validStudentIds.has(r.student_id || r.studentId))
+          .filter(r => validStudentIds.has(r.student_id ?? r.studentId))
           .map(r => ({
-            id: r.id, studentId: r.student_id || r.studentId, date: r.date, subject: r.subject, 
-            instructorName: r.instructor_name || r.instructorName,
-            sessionYear: r.session_year || r.sessionYear, sessionMonth: r.session_month || r.sessionMonth, sessionCount: r.session_count || r.sessionCount,
-            attendanceStatus: r.attendance_status || r.attendanceStatus,
-            rawNotes: r.raw_notes || r.rawNotes, homework_assigned: r.homework_assigned || r.homeworkAssigned,
-            homeworkCompletion: r.homework_completion || r.homeworkCompletion, 
-            proposedSelfStudyDays: r.proposed_self_study_days || r.proposedSelfStudyDays,
-            generatedContent: r.generated_content || r.generatedContent, 
-            quizScore: r.quiz_score || r.quizScore, messages: r.messages || [], 
-            needsAction: r.needs_action || r.needsAction || false
+            id: r.id, studentId: r.student_id ?? r.studentId, date: r.date, subject: r.subject, 
+            instructorName: r.instructor_name ?? r.instructorName,
+            sessionYear: r.session_year ?? r.sessionYear, sessionMonth: r.session_month ?? r.sessionMonth, sessionCount: r.session_count ?? r.sessionCount,
+            attendanceStatus: r.attendance_status ?? r.attendanceStatus,
+            rawNotes: r.raw_notes ?? r.rawNotes, homeworkAssigned: r.homework_assigned ?? r.homeworkAssigned,
+            homeworkCompletion: r.homework_completion ?? r.homeworkCompletion, 
+            proposedSelfStudyDays: r.proposed_self_study_days ?? r.proposedSelfStudyDays,
+            generatedContent: r.generated_content ?? r.generatedContent, 
+            quizScore: r.quiz_score ?? r.quizScore, messages: r.messages || [], 
+            needsAction: r.needs_action ?? r.needsAction ?? false
           }))
         );
-      } else {
-        setReports(MOCK_REPORTS);
       }
 
       if (mockData) {
-        // 模試成績のサニタイズ
         setMockExams(mockData
-          .filter(m => validStudentIds.has(m.student_id || m.studentId))
+          .filter(m => validStudentIds.has(m.student_id ?? m.studentId))
           .map(m => ({ 
-            id: m.id, studentId: m.student_id || m.studentId, examName: m.exam_name || m.examName, 
-            examDate: m.exam_date || m.examDate, scores: m.scores || {} 
+            id: m.id, studentId: m.student_id ?? m.studentId, examName: m.exam_name ?? m.examName, 
+            examDate: m.exam_date ?? m.examDate, scores: m.scores ?? {} 
           }))
         );
       }
 
       if (timetableData) {
-        // 時間割のサニタイズ：生徒または講師が削除されている枠は非表示
         setTimetable(timetableData
-          .filter(t => validStudentIds.has(t.student_id || t.studentId) && validInstructorIds.has(t.instructor_id || t.instructorId))
+          .filter(t => {
+            const sid = t.student_id ?? t.studentId;
+            const iid = t.instructor_id ?? t.instructorId;
+            return validStudentIds.has(sid) && (iid ? validInstructorIds.has(iid) : true);
+          })
           .map(t => ({ 
-            id: t.id, dayOfWeek: t.day_of_week || t.dayOfWeek, startTime: t.start_time || t.startTime, 
-            endTime: t.end_time || t.endTime, subject: t.subject, studentId: t.student_id || t.studentId, 
-            instructorId: t.instructor_id || t.instructorId, room: t.room 
+            id: t.id, dayOfWeek: t.day_of_week ?? t.dayOfWeek, startTime: t.start_time ?? t.startTime, 
+            endTime: t.end_time ?? t.endTime, subject: t.subject, studentId: t.student_id ?? t.studentId, 
+            instructorId: t.instructor_id ?? t.instructorId, room: t.room 
           }))
         );
-      } else {
-        setTimetable(MOCK_TIMETABLE);
       }
 
       if (sessionData) {
-        // 学習ログのサニタイズ
         setAllSessions(sessionData
-          .filter(s => validStudentIds.has(s.student_id || s.studentId))
+          .filter(s => validStudentIds.has(s.student_id ?? s.studentId))
           .map(s => ({ 
-            id: s.id, studentId: s.student_id || s.studentId, date: s.date, subject: s.subject, minutes: s.minutes 
+            id: s.id, studentId: s.student_id ?? s.studentId, date: s.date, subject: s.subject, minutes: s.minutes 
           }))
         );
       }
 
     } catch (err) {
-      console.warn("Sync overlap prevented. Using existing state.");
+      console.warn("Sync overlap prevented.");
     } finally {
       setIsLoading(false);
+      if (syncPendingRef.current) {
+        syncPendingRef.current = false;
+        setTimeout(() => fetchAllData(true), 1000);
+      }
     }
   }, []);
 
@@ -215,17 +237,17 @@ const App: React.FC = () => {
     if (!isAuthenticated) return;
     let channel: any;
     if (isSupabaseConfigured && supabase) {
-      channel = supabase.channel('db-sync-v3.2.5')
+      channel = supabase.channel('db-sync-v4.3.0')
         .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-          if (!isUpdatingRef.current) fetchAllData(true);
+          fetchAllData(true);
         })
         .subscribe();
     }
     const syncTimer = window.setInterval(() => {
-      if (!isUpdatingRef.current) fetchAllData(true);
+      fetchAllData(true);
     }, 15000); 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      if (channel && supabase) supabase.removeChannel(channel);
       clearInterval(syncTimer);
     };
   }, [fetchAllData, isAuthenticated]);
@@ -239,30 +261,44 @@ const App: React.FC = () => {
   const endUpdate = () => {
     isUpdatingRef.current = false;
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
+    // If a sync was requested during update, trigger it now
+    if (syncPendingRef.current) {
+      syncPendingRef.current = false;
+      fetchAllData(true);
+    }
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (loginRole === 'admin') {
       if (loginId === adminConfig.loginId && password === adminConfig.passwordHash) {
-        setCurrentUser({ role: 'admin', id: 'admin', name: adminConfig.name });
+        const user = { role: 'admin' as UserRole, id: 'admin', name: adminConfig.name };
+        setCurrentUser(user);
+        localStorage.setItem('study_base_session', JSON.stringify(user));
         setIsAuthenticated(true);
+        showToast('管理者としてログインしました');
         return;
       }
       alert('管理者ログイン情報が正しくありません。');
     } else if (loginRole === 'instructor') {
       const ins = instructors.find(i => i.loginId === loginId && i.password === password);
       if (ins) {
-        setCurrentUser({ role: 'instructor', id: ins.id, name: ins.name });
+        const user = { role: 'instructor' as UserRole, id: ins.id, name: ins.name };
+        setCurrentUser(user);
+        localStorage.setItem('study_base_session', JSON.stringify(user));
         setIsAuthenticated(true);
+        showToast(`${ins.name} 講師としてログインしました`);
         return;
       }
       alert('講師ログイン情報が正しくありません。');
     } else {
       const std = students.find(s => s.loginId === loginId && s.password === password);
       if (std) {
-        setCurrentUser({ role: loginRole, id: std.id, name: std.name });
+        const user = { role: loginRole as UserRole, id: std.id, name: std.name };
+        setCurrentUser(user);
+        localStorage.setItem('study_base_session', JSON.stringify(user));
         setIsAuthenticated(true);
+        showToast(`${std.name} さんとしてログインしました`);
         return;
       }
       alert('生徒・保護者ログイン情報が正しくありません。');
@@ -270,9 +306,12 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => { 
+    localStorage.removeItem('study_base_session');
     setIsAuthenticated(false); 
     setAuthStep('role-selection'); 
     setActiveTab('dashboard'); 
+    setCurrentUser({ role: 'student', id: '', name: '' });
+    showToast('ログアウトしました');
   };
 
   const handleUpdateAdminConfig = async (updates: Partial<AdminConfig>) => {
@@ -287,6 +326,7 @@ const App: React.FC = () => {
           word_king_holder: latestConfig.wordKingClassroomHolder
         }).eq('id', 1);
       }
+      showToast('システム設定を更新しました');
     } finally { endUpdate(); }
   };
 
@@ -303,6 +343,9 @@ const App: React.FC = () => {
         if (updates.weeklyInstructorMessage !== undefined) dbUpdates.weekly_instructor_message = updates.weeklyInstructorMessage;
         if (updates.loginId !== undefined) dbUpdates.login_id = updates.loginId;
         if (updates.password !== undefined) dbUpdates.password = updates.password;
+        if (updates.studyPlusId !== undefined) dbUpdates.study_plus_id = updates.studyPlusId;
+        if (updates.studyPlusMinutes !== undefined) dbUpdates.study_plus_minutes = updates.studyPlusMinutes;
+        if (updates.studyPlusLastSynced !== undefined) dbUpdates.study_plus_last_synced = updates.studyPlusLastSynced;
         if (updates.iqHistory !== undefined) dbUpdates.iq_history = updates.iqHistory;
         if (updates.wordKingBest !== undefined) dbUpdates.word_king_best = updates.wordKingBest;
         if (updates.targets !== undefined) dbUpdates.targets = updates.targets;
@@ -326,20 +369,19 @@ const App: React.FC = () => {
           target_school: d.targetSchool, target_faculty: d.targetFaculty 
         });
       }
+      showToast('生徒を登録しました');
     } finally { endUpdate(); }
   };
 
   const handleDeleteStudent = async (id: string) => {
     startUpdate();
     try {
-      // 1. ローカルステートを即時一斉削除（幽霊防止）
       setStudents(prev => prev.filter(s => s.id !== id));
       setReports(prev => prev.filter(r => r.studentId !== id));
       setAllSessions(prev => prev.filter(s => s.studentId !== id));
       setTimetable(prev => prev.filter(t => t.studentId !== id));
       setMockExams(prev => prev.filter(m => m.studentId !== id));
 
-      // 2. DBから全関連データを完全に抹消（連鎖削除の徹底）
       if (isSupabaseConfigured && supabase) {
         await Promise.all([
           supabase.from('students').delete().eq('id', id),
@@ -350,18 +392,20 @@ const App: React.FC = () => {
           supabase.from('mock_exams').delete().eq('student_id', id)
         ]);
       }
+      showToast('生徒データを削除しました');
     } finally { endUpdate(); }
   };
 
   const handleLogSession = async (session: StudySession) => {
     startUpdate();
     try {
-      setAllSessions(prev => [...prev, session]);
+      setAllSessions(prev => [session, ...prev]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('study_sessions').insert({
           id: session.id, student_id: session.studentId, date: session.date, subject: session.subject, minutes: session.minutes
         });
       }
+      showToast('学習記録を保存しました');
     } finally { endUpdate(); }
   };
 
@@ -379,6 +423,7 @@ const App: React.FC = () => {
           needs_action: report.needsAction || false
         });
       }
+      showToast('指導報告書を送信しました');
     } finally { endUpdate(); }
   };
 
@@ -424,6 +469,7 @@ const App: React.FC = () => {
       const updatedMessages = [...currentMessages, newMessage];
       const shouldNeedAction = currentUser.role === 'student' || currentUser.role === 'parent';
       await handleUpdateReport(reportId, { messages: updatedMessages, needsAction: shouldNeedAction ? true : report?.needsAction });
+      showToast('メッセージを送信しました');
     } finally { endUpdate(); }
   };
 
@@ -435,21 +481,29 @@ const App: React.FC = () => {
         const updatedMessages = (report.messages || []).filter(m => m.id !== messageId);
         await handleUpdateReport(reportId, { messages: updatedMessages });
       }
+      showToast('メッセージを削除しました');
     } finally { endUpdate(); }
   };
 
-  const handleUpdateTimetable = async (newTimetable: TimetableEntry[]) => {
+  const handleUpdateTimetable = async (newTimetable: TimetableEntry[], deletedIds: string[] = []) => {
     startUpdate();
     try {
       setTimetable(newTimetable);
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('timetable').delete().neq('id', 'flush_prevent');
-        const insertData = newTimetable.map(t => ({
+        if (deletedIds.length > 0) {
+          await supabase.from('timetable').delete().in('id', deletedIds);
+        }
+        const upsertData = newTimetable.map(t => ({
           id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
           subject: t.subject, student_id: t.studentId, instructor_id: t.instructorId, room: t.room
         }));
-        if (insertData.length > 0) await supabase.from('timetable').insert(insertData);
+        if (upsertData.length > 0) {
+          await supabase.from('timetable').upsert(upsertData, { onConflict: 'id' });
+        }
       }
+      showToast('時間割を保存しました');
+    } catch (e) {
+      showToast('保存中にエラーが発生しました', 'error');
     } finally { endUpdate(); }
   };
 
@@ -464,6 +518,7 @@ const App: React.FC = () => {
           id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password 
         });
       }
+      showToast('講師を登録しました');
     } finally { endUpdate(); }
   };
 
@@ -479,13 +534,13 @@ const App: React.FC = () => {
         if (upd.password) dbUpd.password = upd.password;
         await supabase.from('instructors').update(dbUpd).eq('id', id);
       }
+      showToast('講師情報を更新しました');
     } finally { endUpdate(); }
   };
 
   const handleDeleteInstructor = async (id: string) => {
     startUpdate();
     try {
-      // 1. ローカルステートを即時一斉削除
       setInstructors(prev => prev.filter(i => i.id !== id));
       setTimetable(prev => prev.filter(t => t.instructorId !== id));
       setStudents(prev => prev.map(s => ({
@@ -493,16 +548,15 @@ const App: React.FC = () => {
         instructorIds: (s.instructorIds || []).filter(iid => iid !== id)
       })));
 
-      // 2. DB連鎖削除（生徒のID配列からも確実に除去）
       if (isSupabaseConfigured && supabase) {
         const { data: allStudents } = await supabase.from('students').select('id, instructor_ids');
-        let studentUpdates: Promise<any>[] = [];
+        let studentUpdates: any[] = [];
         if (allStudents) {
           studentUpdates = allStudents
             .filter(s => (s.instructor_ids || []).includes(id))
             .map(s => {
               const newIds = s.instructor_ids.filter((iid: string) => iid !== id);
-              return supabase.from('students').update({ instructor_ids: newIds }).eq('id', s.id);
+              return supabase!.from('students').update({ instructor_ids: newIds }).eq('id', s.id);
             });
         }
         await Promise.all([
@@ -512,18 +566,20 @@ const App: React.FC = () => {
           ...studentUpdates
         ]);
       }
+      showToast('講師データを削除しました');
     } finally { endUpdate(); }
   };
 
   const handleAddMockExam = async (e: MockExam) => {
     startUpdate();
     try {
-      setMockExams(prev => [...prev, e]);
+      setMockExams(prev => [e, ...prev]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').insert({ 
           id: e.id, student_id: e.studentId, exam_name: e.examName, exam_date: e.examDate, scores: e.scores 
         });
       }
+      showToast('模試成績を登録しました');
     } finally { endUpdate(); }
   };
 
@@ -536,6 +592,7 @@ const App: React.FC = () => {
           exam_name: e.examName, exam_date: e.examDate, scores: e.scores 
         }).eq('id', e.id);
       }
+      showToast('模試成績を更新しました');
     } finally { endUpdate(); }
   };
 
@@ -546,6 +603,7 @@ const App: React.FC = () => {
       if (isSupabaseConfigured && supabase) {
         await supabase.from('mock_exams').delete().eq('id', id);
       }
+      showToast('模試成績を削除しました');
     } finally { endUpdate(); }
   };
 
@@ -558,6 +616,7 @@ const App: React.FC = () => {
         id: generateUniqueId('iq'), date: getLocalISOString(), score, estimatedIQ: Math.round(100 + (score - 50) * 0.8), breakdown, aiAnalysis: analysis
       };
       await handleUpdateStudent(currentUser.id, { iqHistory: [newIQ, ...(activeStudent?.iqHistory || [])] });
+      showToast('知能診断結果を保存しました');
     } finally { endUpdate(); }
   };
 
@@ -568,6 +627,7 @@ const App: React.FC = () => {
       const activeStudent = students.find(s => s.id === currentUser.id);
       if (newScore > (activeStudent?.wordKingBest || 0)) {
         await handleUpdateStudent(currentUser.id, { wordKingBest: newScore });
+        showToast('自己ベストを更新しました！');
       }
     } finally { endUpdate(); }
   };
@@ -578,20 +638,22 @@ const App: React.FC = () => {
       case 'dashboard': return <Dashboard reports={reports} students={students} instructors={instructors} role={currentUser.role} mockExams={mockExams} currentUserStudent={activeStudent} currentUserId={currentUser.id} allSessions={allSessions} onLogSession={handleLogSession} timetable={timetable} onUpdateTimetable={handleUpdateTimetable} onUpdateStudent={handleUpdateStudent} />;
       case 'create': return <ReportForm students={students} currentUser={currentUser} onSave={handleSaveReport} />;
       case 'reports': return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} />;
-      case 'word-king': return <WordKing classroomBest={adminConfig.wordKingClassroomRecord} classroomHolder={adminConfig.wordKingClassroomHolder} userId={currentUser.id} personalBestFromDB={activeStudent?.wordKingBest || 0} onPersonalBestUpdate={handleUpdateWordKingBest} onNewClassroomRecord={(record, holder) => handleUpdateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder })} />;
+      case 'word-king': return <WordKing classroomBest={adminConfig.wordKingClassroomRecord} classroomHolder={adminConfig.wordKingClassroomHolder} userId={currentUser.id} personalBestFromDB={activeStudent?.wordKingBest || 0} onPersonalBestUpdate={handleUpdateWordKingBest} onNewClassroomRecord={(record, holder) => { handleUpdateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder }); showToast('校舎新記録を樹立しました！👑'); }} />;
       case 'iq-test': return <IQTest studentName={currentUser.name} grade={activeStudent?.grade || ""} userId={currentUser.id} iqHistory={activeStudent?.iqHistory || []} onComplete={handleSaveIQ} />;
       case 'interview': return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
       case 'students': return <StudentCenter students={students} reports={reports} allSessions={allSessions} instructors={instructors} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
       case 'instructors': return <InstructorCenter instructors={instructors} students={students} onAssignStudent={async (sid, iid) => {
           const s = students.find(std => std.id === sid);
           await handleUpdateStudent(sid, { instructorIds: Array.from(new Set([...(s?.instructorIds || []), iid])) });
+          showToast('担当生徒を追加しました');
         }} onRemoveStudent={async (sid, iid) => {
           const s = students.find(std => std.id === sid);
           await handleUpdateStudent(sid, { instructorIds: (s?.instructorIds || []).filter(id => id !== iid) });
+          showToast('担当生徒を解除しました');
         }} onUpdateInstructor={handleUpdateInstructor} onAddInstructor={handleAddInstructor} onDeleteInstructor={handleDeleteInstructor} />;
       case 'salary': return <SalaryCenter instructors={instructors} reports={reports} />;
       case 'mock': return <MockExamCenter students={students} mockExams={mockExams} role={currentUser.role} currentUserId={currentUser.id} onSave={handleAddMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />;
-      case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} />;
+      case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={handleUpdateTimetable} />;
       case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} />;
       default: return <div className="p-10 text-center text-slate-400 font-bold italic">Module not found.</div>;
@@ -617,7 +679,7 @@ const App: React.FC = () => {
             <button type="button" onClick={() => { setAuthStep('role-selection'); setLoginId(''); setPassword(''); }} className="text-xs text-slate-400 font-bold hover:text-slate-600 transition-colors">戻る</button>
           </form>
         )}
-        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 3.2.5</p>
+        <p className="text-[10px] text-slate-300 font-bold mt-8 uppercase tracking-widest">ver 4.3.0</p>
       </div>
     </div>
   );
@@ -625,6 +687,14 @@ const App: React.FC = () => {
   return (
     <Layout role={currentUser.role} userName={currentUser.name} onLogout={handleLogout} activeTab={activeTab} setActiveTab={setActiveTab} reports={reports}>
       {renderContent()}
+      
+      {/* トースト表示 */}
+      {toast && (
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 px-8 py-4 rounded-full shadow-2xl z-[500] animate-slideUp flex items-center gap-3 border ${toast.type === 'success' ? 'bg-indigo-900 text-white border-indigo-500' : 'bg-rose-900 text-white border-rose-500'}`}>
+          <span className="text-xl">{toast.type === 'success' ? '✅' : '⚠️'}</span>
+          <span className="font-black text-sm tracking-tighter">{toast.message}</span>
+        </div>
+      )}
     </Layout>
   );
 };

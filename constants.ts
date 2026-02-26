@@ -107,3 +107,39 @@ export const FACULTY_OPTIONS = [
   '家政・生活科学系',
   '総合・環境・情報系'
 ];
+
+// 科目設定の拡張（高校生科目にも対応）
+export const SUBJECT_CONFIG: Record<string, { color: string; label: string }> = {
+  '数学': { color: '#6366f1', label: '数' },
+  '数学IA': { color: '#6366f1', label: 'IA' },
+  '数学IIBC': { color: '#4f46e5', label: 'IIBC' },
+  '数学III': { color: '#3730a3', label: 'III' },
+  '英語': { color: '#f43f5e', label: '英' },
+  '英語R': { color: '#f43f5e', label: '英R' },
+  '英語L': { color: '#e11d48', label: '英L' },
+  '国語': { color: '#f59e0b', label: '国' },
+  '現代文': { color: '#f59e0b', label: '現' },
+  '古文・漢文': { color: '#d97706', label: '古' },
+  '理科': { color: '#10b981', label: '理' },
+  '物理': { color: '#10b981', label: '物' },
+  '化学': { color: '#059669', label: '化' },
+  '生物': { color: '#047857', label: '生' },
+  '社会': { color: '#0ea5e9', label: '社' },
+  '日本史': { color: '#0ea5e9', label: '日' },
+  '世界史': { color: '#0284c7', label: '世' },
+  '地理': { color: '#0369a1', label: '地' },
+  '情報': { color: '#8b5cf6', label: '情' },
+  '小論文': { color: '#ec4899', label: '論' },
+  'その他': { color: '#64748b', label: '他' },
+};
+
+export const JHS_SUBJECTS = ['数学', '英語', '国語', '理科', '社会', 'その他'];
+export const HS_SUBJECTS = [
+  '数学IA', '数学IIBC', '数学III', 
+  '英語R', '英語L', 
+  '現代文', '古文・漢文', 
+  '物理', '化学', '生物', 
+  '日本史', '世界史', '地理', 
+  '情報', '小論文', 'その他'
+];
+
