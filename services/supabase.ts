@@ -18,14 +18,17 @@ const getEnv = (name: string) => {
   }
 };
 
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+
+console.log("[Supabase] URL detected:", supabaseUrl ? "Yes" : "No");
+console.log("[Supabase] Key detected:", supabaseAnonKey ? "Yes" : "No");
 
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = !!(supabase && supabaseUrl && supabaseAnonKey);
 
 if (!isSupabaseConfigured) {
   console.info("Supabase credentials not found. Initializing in Local-First mode.");
