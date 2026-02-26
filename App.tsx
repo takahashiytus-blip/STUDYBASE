@@ -70,6 +70,19 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // ローカルモード時のデータ永続化
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      localStorage.setItem('sb_data_students', JSON.stringify(students));
+      localStorage.setItem('sb_data_instructors', JSON.stringify(instructors));
+      localStorage.setItem('sb_data_reports', JSON.stringify(reports));
+      localStorage.setItem('sb_data_mock_exams', JSON.stringify(mockExams));
+      localStorage.setItem('sb_data_sessions', JSON.stringify(allSessions));
+      localStorage.setItem('sb_data_timetable', JSON.stringify(timetable));
+      localStorage.setItem('study_base_admin_config', JSON.stringify(adminConfig));
+    }
+  }, [students, instructors, reports, mockExams, allSessions, timetable, adminConfig]);
+
   const isUpdatingRef = useRef<boolean>(false);
   const updateTimeoutRef = useRef<number | null>(null);
   const syncPendingRef = useRef<boolean>(false);
