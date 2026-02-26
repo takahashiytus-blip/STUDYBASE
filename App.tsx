@@ -681,10 +681,17 @@ const App: React.FC = () => {
     }
   };
 
-  if (isLoading) return <div className="h-[100dvh] flex items-center justify-center font-black text-indigo-600 animate-pulse text-xl">Initializing Study Base...</div>;
+  if (isLoading) return (
+    <div className="h-[100dvh] flex flex-col items-center justify-center bg-slate-50">
+      <img src="/studybase-logo.svg" alt="StudyBase Logo" className="w-24 h-24 mb-6 animate-bounce" />
+      <div className="font-black text-indigo-600 text-xl tracking-tighter">Initializing Study Base...</div>
+    </div>
+  );
+
   if (!isAuthenticated) return (
     <div className="h-[100dvh] flex items-center justify-center p-6 bg-slate-50">
       <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-sm w-full border border-slate-100 flex flex-col items-center">
+        <img src="/studybase-logo.svg" alt="StudyBase Logo" className="w-20 h-20 mb-6" />
         <h1 className="text-4xl font-black italic mb-8 tracking-tighter">STUDY <span className="text-indigo-600">BASE</span></h1>
         {authStep === 'role-selection' ? (
           <div className="space-y-4 w-full">

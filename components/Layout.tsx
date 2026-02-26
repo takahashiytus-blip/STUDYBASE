@@ -64,9 +64,9 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
     <div className="flex flex-col md:flex-row h-[100dvh] bg-[#f8fafc] overflow-hidden">
       {/* Mobile Header - Added safe-area padding for notch devices */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-[#0f172a] text-white px-4 flex justify-between items-center shadow-lg z-[70] h-[calc(64px+env(safe-area-inset-top))] border-b border-white/5 pt-[env(safe-area-inset-top)]">
-        <div className="flex flex-col items-center flex-1">
-          <span className="text-[8px] font-bold tracking-[0.2em] text-indigo-300 uppercase leading-none mb-1">受験専門塾</span>
-          <h1 className="text-xl font-black tracking-tighter leading-none uppercase">Gakushikan</h1>
+        <div className="flex items-center gap-3 flex-1">
+          <img src="/studybase-logo.svg" alt="StudyBase Logo" className="w-8 h-8" />
+          <h1 className="text-xl font-black tracking-tighter leading-none uppercase">Study Base</h1>
         </div>
         <button 
           onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -89,8 +89,8 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         ${isMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-8 shrink-0 hidden md:flex flex-col items-center justify-center border-b border-white/5 bg-black/20">
-          <span className="text-[10px] font-black tracking-[0.3em] text-indigo-400 uppercase mb-1 opacity-80">受験専門塾</span>
-          <h1 className="text-3xl font-black tracking-tighter text-white uppercase">Gakushikan</h1>
+          <img src="/studybase-logo.svg" alt="StudyBase Logo" className="w-16 h-16 mb-2" />
+          <h1 className="text-2xl font-black tracking-tighter text-white uppercase">Study Base</h1>
         </div>
         
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
