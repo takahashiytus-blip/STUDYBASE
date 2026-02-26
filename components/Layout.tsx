@@ -11,9 +11,10 @@ interface LayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   reports: Report[];
+  isCloudConnected?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, activeTab, setActiveTab, reports }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, activeTab, setActiveTab, reports, isCloudConnected }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isPrivileged = role === 'instructor' || role === 'admin';
   const isAdmin = role === 'admin';
@@ -118,13 +119,28 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
 
         <div className="p-4 mt-auto border-t border-white/5 bg-black/10 shrink-0">
           <div className="flex items-center gap-3 mb-4 px-2">
-            <div className={`w-10 h-10 shrink-0 rounded-xl ${role === 'admin' ? 'bg-rose-500' : 'bg-slate-700'} flex items-center justify-center font-black shadow-lg text-white text-base border border-white/10`}>
+            <div className={`w-10 h-10 shrink-0 rounded-xl ${role === 'admin' ? 'bg-rose-500' : 'bg-slate-700'} flex items-center justify-center font-black shadow-lg text-white text-base border border-white/10 relative`}>
               {userName[0]}
+              {isCloudConnected !== undefined && (
+                <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-[#0f172a] ${isCloudConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} title={isCloudConnected ? 'クラウド同期中' : 'ローカルモード'} />
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-[13px] font-bold truncate text-white leading-none mb-1">{userName}</p>
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">{ROLE_LABELS[role]}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">{ROLE_LABELS[role]}</p>
+                {isCloudConnected && <span className="text-[8px] bg-emerald-500/10 text-emerald-500 px-1 rounded font-black uppercase tracking-tighter">Live</span>}
+              </div>
             </div>
+            {isCloudConnected && (
+              <button 
+                onClick={() => window.location.reload()} 
+                className="ml-auto w-8 h-8 flex items-center justify-center bg-white/5 rounded-lg hover:bg-white/10 transition-colors text-slate-400"
+                title="手動更新"
+              >
+                🔄
+              </button>
+            )}
           </div>
           <button
             onClick={onLogout}

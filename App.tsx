@@ -103,14 +103,15 @@ const App: React.FC = () => {
     }
 
     try {
+      console.log(`[Sync] Fetching latest data from Supabase... (Silent: ${isSilent})`);
       const [
-        { data: adminData },
-        { data: studentData },
-        { data: instructorData },
-        { data: reportData },
-        { data: mockData },
-        { data: timetableData },
-        { data: sessionData }
+        { data: adminData, error: adminError },
+        { data: studentData, error: studentError },
+        { data: instructorData, error: instructorError },
+        { data: reportData, error: reportError },
+        { data: mockData, error: mockError },
+        { data: timetableData, error: timetableError },
+        { data: sessionData, error: sessionError }
       ] = await Promise.all([
         supabase.from('admin_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('students').select('*'),
@@ -120,6 +121,12 @@ const App: React.FC = () => {
         supabase.from('timetable').select('*'),
         supabase.from('study_sessions').select('*').order('date', { ascending: false })
       ]);
+
+      if (adminError || studentError || instructorError || reportError || mockError || timetableError || sessionError) {
+        console.error("[Sync] Error fetching data:", { adminError, studentError, instructorError, reportError, mockError, timetableError, sessionError });
+      } else {
+        console.log(`[Sync] Successfully fetched: ${instructorData?.length} instructors, ${studentData?.length} students`);
+      }
 
       const validInstructorIds = new Set((instructorData || []).map(i => i.id));
       const validStudentIds = new Set((studentData || []).map(s => s.id));
@@ -686,7 +693,15 @@ const App: React.FC = () => {
   );
 
   return (
-    <Layout role={currentUser.role} userName={currentUser.name} onLogout={handleLogout} activeTab={activeTab} setActiveTab={setActiveTab} reports={reports}>
+    <Layout 
+      role={currentUser.role} 
+      userName={currentUser.name} 
+      onLogout={handleLogout} 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab} 
+      reports={reports}
+      isCloudConnected={isSupabaseConfigured}
+    >
       {renderContent()}
       
       {/* トースト表示 */}
