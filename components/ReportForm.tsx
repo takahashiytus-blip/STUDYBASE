@@ -248,8 +248,28 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
               <textarea rows={4} placeholder="授業の様子や弱点を入力..." value={rawNotes} onChange={(e) => handleInteraction('rawNotes', e.target.value, setRawNotes)} className={inputBaseStyle + " resize-none text-sm"} />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-indigo-400 uppercase mb-2 ml-1">宿題内容</label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">宿題内容</label>
               <textarea rows={2} placeholder="宿題の範囲..." value={homeworkAssigned} onChange={(e) => handleInteraction('homeworkAssigned', e.target.value, setHomeworkAssigned)} className={inputBaseStyle + " resize-none text-sm border-indigo-100"} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">自習来塾提案日</label>
+              <div className="flex flex-wrap gap-2">
+                {['月', '火', '水', '木', '金', '土', '日'].map(day => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => {
+                      const newDays = proposedSelfStudyDays.includes(day)
+                        ? proposedSelfStudyDays.filter(d => d !== day)
+                        : [...proposedSelfStudyDays, day];
+                      handleInteraction('proposedSelfStudyDays', newDays, setProposedSelfStudyDays);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black border-2 transition-all ${proposedSelfStudyDays.includes(day) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-300'}`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -273,24 +293,73 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
             <div className="flex-1 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
               <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100">
                 <h4 className="text-[10px] font-black text-indigo-600 uppercase mb-2 tracking-widest">指導内容要約</h4>
-                <p className="text-sm font-bold leading-relaxed text-slate-700 italic">「{generatedPreview.lessonSummary}」</p>
+                <textarea 
+                  value={generatedPreview.lessonSummary} 
+                  onChange={(e) => setGeneratedPreview({...generatedPreview, lessonSummary: e.target.value})}
+                  className="w-full bg-transparent text-sm font-bold leading-relaxed text-slate-700 italic border-none focus:ring-0 resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">生徒の様子・理解度</h4>
+                <textarea 
+                  value={generatedPreview.studentPerformance} 
+                  onChange={(e) => setGeneratedPreview({...generatedPreview, studentPerformance: e.target.value})}
+                  className="w-full bg-transparent text-sm font-bold leading-relaxed text-slate-700 border-none focus:ring-0 resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">宿題の取り組み状況</h4>
+                <textarea 
+                  value={generatedPreview.homeworkStatus} 
+                  onChange={(e) => setGeneratedPreview({...generatedPreview, homeworkStatus: e.target.value})}
+                  className="w-full bg-transparent text-sm font-bold leading-relaxed text-slate-700 border-none focus:ring-0 resize-none"
+                  rows={2}
+                />
               </div>
 
               <div>
-                <h4 className="text-[10px] font-black text-amber-600 uppercase mb-4 tracking-widest">AI 7日間学習ロードマップ</h4>
+                <h4 className="text-[10px] font-black text-amber-600 uppercase mb-4 tracking-widest">7日間学習計画</h4>
                 <div className="space-y-2">
                   {generatedPreview.weeklyPlan.map((plan, idx) => (
                     <div key={idx} className="flex gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
                       <span className="text-[10px] font-black text-indigo-500 shrink-0 pt-1">{plan.day}</span>
-                      <span className="text-sm font-bold text-slate-700">{plan.task}</span>
+                      <input 
+                        type="text"
+                        value={plan.task}
+                        onChange={(e) => {
+                          const newPlan = [...generatedPreview.weeklyPlan];
+                          newPlan[idx] = { ...newPlan[idx], task: e.target.value };
+                          setGeneratedPreview({ ...generatedPreview, weeklyPlan: newPlan });
+                        }}
+                        className="w-full bg-transparent text-sm font-bold text-slate-700 border-none focus:ring-0 p-0"
+                      />
                     </div>
                   ))}
                 </div>
               </div>
 
+              <div className="bg-indigo-50/50 p-6 rounded-[2rem] border border-indigo-100">
+                <h4 className="text-[10px] font-black text-indigo-500 uppercase mb-2 tracking-widest">今後の課題・アドバイス</h4>
+                <textarea 
+                  value={generatedPreview.nextSteps} 
+                  onChange={(e) => setGeneratedPreview({...generatedPreview, nextSteps: e.target.value})}
+                  className="w-full bg-transparent text-sm font-bold leading-relaxed text-slate-700 border-none focus:ring-0 resize-none"
+                  rows={3}
+                />
+              </div>
+
               <div className="bg-rose-50 p-6 rounded-[2rem] border border-rose-100">
                 <h4 className="text-[10px] font-black text-rose-500 uppercase mb-2 tracking-widest">保護者様へ</h4>
-                <p className="text-sm font-bold italic text-slate-800 leading-relaxed">「{generatedPreview.messageToParents}」</p>
+                <textarea 
+                  value={generatedPreview.messageToParents} 
+                  onChange={(e) => setGeneratedPreview({...generatedPreview, messageToParents: e.target.value})}
+                  className="w-full bg-transparent text-sm font-bold italic text-slate-800 leading-relaxed border-none focus:ring-0 resize-none"
+                  rows={4}
+                />
               </div>
 
               <button onClick={handleSave} className="w-full py-5 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-black transition-all active:scale-[0.98] mt-4 mb-4">

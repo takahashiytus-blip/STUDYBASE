@@ -11,6 +11,7 @@ interface ReportListProps {
   onDeleteMessage: (reportId: string, messageId: string) => void;
   onMarkResolved: (reportId: string) => void;
   onUpdateReport?: (reportId: string, updates: Partial<Report>) => void;
+  onDeleteReport?: (reportId: string) => void;
   title?: string;
   hideHeader?: boolean;
   showFilters?: boolean; 
@@ -24,6 +25,7 @@ const ReportList: React.FC<ReportListProps> = ({
   onDeleteMessage, 
   onMarkResolved, 
   onUpdateReport, 
+  onDeleteReport,
   title = "指導報告書一覧", 
   hideHeader = false,
   showFilters = true 
@@ -218,14 +220,40 @@ const ReportList: React.FC<ReportListProps> = ({
                   {getHomeworkBadge(report.homeworkCompletion)}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400 font-black uppercase mb-1">{report.date.replace(/-/g, ' / ')}</p>
+              <p className="text-[11px] text-slate-400 font-black uppercase mb-1">{(report.date || '').replace(/-/g, ' / ')}</p>
               <h3 className="text-2xl font-black text-slate-900 mb-2">{getStudentName(report.studentId)} さん</h3>
+              {report.proposedSelfStudyDays && (Array.isArray(report.proposedSelfStudyDays) ? report.proposedSelfStudyDays.length > 0 : !!report.proposedSelfStudyDays) && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  <span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                    自習提案: {Array.isArray(report.proposedSelfStudyDays) ? report.proposedSelfStudyDays.join('・') : report.proposedSelfStudyDays}
+                  </span>
+                </div>
+              )}
               <p className="text-[14px] text-slate-600 line-clamp-2 italic font-medium">「{report.generatedContent?.messageToParents || 'メッセージなし'}」</p>
               
               <div className="mt-auto pt-4 flex justify-between items-end">
-                {report.needsAction ? (
-                  <span className="text-[9px] font-black bg-rose-500 text-white px-3 py-1 rounded-full animate-pulse">未返信あり</span>
-                ) : <div />}
+                <div className="flex gap-2">
+                  {report.needsAction ? (
+                    <span className="text-[9px] font-black bg-rose-500 text-white px-3 py-1 rounded-full animate-pulse">未返信あり</span>
+                  ) : <div />}
+                  {isPrivileged && (
+                    <button 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        console.log('[ReportList] Delete card clicked for', report.id);
+                        if (onDeleteReport) {
+                          onDeleteReport(report.id); 
+                        } else {
+                          console.error('[ReportList] onDeleteReport prop is missing!');
+                          alert('削除機能が正しく設定されていません。管理者にお問い合わせください。');
+                        }
+                      }}
+                      className="text-[10px] font-black text-rose-500 hover:text-rose-700 transition-colors"
+                    >
+                      🗑️ 削除
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
                   <span className="text-sm">👨‍🏫</span>
                   <span className="text-[10px] font-black text-slate-500 truncate max-w-[80px]">{report.instructorName} 講師</span>
@@ -253,7 +281,26 @@ const ReportList: React.FC<ReportListProps> = ({
                 <h3 className="text-xl md:text-3xl font-black tracking-tighter truncate mt-2 drop-shadow-md">{getStudentName(selectedReport.studentId)} 指導報告書</h3>
               </div>
               <div className="flex gap-2 md:gap-3 shrink-0 ml-4">
-                {isPrivileged && !isEditingContent && <button onClick={() => setIsEditingContent(true)} className="bg-white/10 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black hover:bg-white/20 transition-all border border-white/10 shadow-sm">✎ 編集</button>}
+                {isPrivileged && !isEditingContent && (
+                  <>
+                    <button onClick={() => setIsEditingContent(true)} className="bg-white/10 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black hover:bg-white/20 transition-all border border-white/10 shadow-sm">✎ 編集</button>
+                    <button 
+                      onClick={() => { 
+                        console.log('[ReportList] Delete modal clicked for', selectedReport.id);
+                        if (onDeleteReport) {
+                          onDeleteReport(selectedReport.id); 
+                          setSelectedReportId(null); 
+                        } else {
+                          console.error('[ReportList] onDeleteReport prop is missing in modal!');
+                          alert('削除機能が正しく設定されていません。');
+                        }
+                      }} 
+                      className="bg-rose-500/20 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black hover:bg-rose-500 transition-all border border-rose-500/30 shadow-sm text-rose-100"
+                    >
+                      🗑️ 削除
+                    </button>
+                  </>
+                )}
                 {isEditingContent && <button onClick={saveReportEdits} className="bg-white text-amber-700 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg hover:bg-amber-50 transition-all">💾 保存</button>}
                 <button onClick={() => setSelectedReportId(null)} className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white/10 flex items-center justify-center text-lg hover:bg-rose-500 transition-all border border-white/10">✕</button>
               </div>
@@ -271,7 +318,13 @@ const ReportList: React.FC<ReportListProps> = ({
                   </div>
                   <div>
                     <span className="text-[10px] font-black text-indigo-400 block mb-1">生徒の様子</span>
-                    <p className="text-slate-700 leading-relaxed font-bold text-[14px]">{selectedReport.generatedContent?.studentPerformance || '記録なし'}</p>
+                    {isEditingContent ? <textarea value={editBuffer.generatedContent?.studentPerformance || ''} onChange={(e) => handleUpdateBuffer('studentPerformance', e.target.value, true)} className="w-full text-sm p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold focus:bg-white outline-none" rows={3} /> : 
+                    <p className="text-slate-700 leading-relaxed font-bold text-[14px]">{selectedReport.generatedContent?.studentPerformance || '記録なし'}</p>}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-indigo-400 block mb-1">宿題の取り組み状況</span>
+                    {isEditingContent ? <textarea value={editBuffer.generatedContent?.homeworkStatus || ''} onChange={(e) => handleUpdateBuffer('homeworkStatus', e.target.value, true)} className="w-full text-sm p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold focus:bg-white outline-none" rows={2} /> : 
+                    <p className="text-slate-700 leading-relaxed font-bold text-[14px]">{selectedReport.generatedContent?.homeworkStatus || '記録なし'}</p>}
                   </div>
                 </div>
               </section>
@@ -282,12 +335,39 @@ const ReportList: React.FC<ReportListProps> = ({
                    今回の宿題タスク (To-Do)
                  </h4>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                   {selectedReport.generatedContent?.homeworkList?.map((task, i) => (
-                     <div key={i} className="flex items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-indigo-50 group hover:border-indigo-300 transition-all">
-                        <div className="w-5 h-5 rounded-md border-2 border-indigo-100 flex-shrink-0"></div>
-                        <span className="text-sm font-bold text-slate-700">{task}</span>
-                     </div>
-                   ))}
+                   {isEditingContent ? (
+                     <>
+                       {(editBuffer.generatedContent?.homeworkList || []).map((task: string, i: number) => (
+                         <div key={i} className="flex items-center gap-2 bg-white p-3 rounded-xl shadow-sm border border-indigo-50">
+                           <input 
+                             type="text" 
+                             value={task} 
+                             onChange={(e) => {
+                               const newList = [...(editBuffer.generatedContent?.homeworkList || [])];
+                               newList[i] = e.target.value;
+                               handleUpdateBuffer('homeworkList', newList, true);
+                             }}
+                             className="flex-1 text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
+                           />
+                           <button onClick={() => {
+                             const newList = (editBuffer.generatedContent?.homeworkList || []).filter((_: any, idx: number) => idx !== i);
+                             handleUpdateBuffer('homeworkList', newList, true);
+                           }} className="text-rose-500 text-xs">✕</button>
+                         </div>
+                       ))}
+                       <button onClick={() => {
+                         const newList = [...(editBuffer.generatedContent?.homeworkList || []), ''];
+                         handleUpdateBuffer('homeworkList', newList, true);
+                       }} className="col-span-full py-2 border-2 border-dashed border-indigo-200 rounded-xl text-indigo-500 text-xs font-black">+ タスクを追加</button>
+                     </>
+                   ) : (
+                     selectedReport.generatedContent?.homeworkList?.map((task, i) => (
+                       <div key={i} className="flex items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-indigo-50 group hover:border-indigo-300 transition-all">
+                          <div className="w-5 h-5 rounded-md border-2 border-indigo-100 flex-shrink-0"></div>
+                          <span className="text-sm font-bold text-slate-700">{task}</span>
+                       </div>
+                     ))
+                   )}
                  </div>
               </section>
 
@@ -295,17 +375,30 @@ const ReportList: React.FC<ReportListProps> = ({
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-600/20"></div>
                 <h4 className="text-sm md:text-base font-black text-slate-800 mb-8 flex items-center gap-4 relative z-10">
                   <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm border border-indigo-100">📅</span>
-                  7日間学習計画 (AI提案)
+                  7日間学習計画
                 </h4>
                 <div className="relative z-10 space-y-0">
-                  {selectedReport.generatedContent?.weeklyPlan?.map((plan, idx) => (
+                  {(isEditingContent ? (editBuffer.generatedContent?.weeklyPlan || []) : (selectedReport.generatedContent?.weeklyPlan || [])).map((plan: any, idx: number) => (
                     <div key={idx} className="relative pl-10 pb-8 last:pb-2 group">
                       <div className="absolute left-[3px] top-2 bottom-0 w-[2px] bg-slate-100 group-last:hidden"></div>
                       <div className="absolute left-[-4px] top-2 w-4 h-4 rounded-full bg-indigo-500 ring-4 ring-white shadow-md"></div>
                       <div className="flex flex-col md:flex-row md:items-baseline md:gap-4">
                         <span className="text-indigo-600 font-black text-[11px] uppercase tracking-widest shrink-0 whitespace-nowrap mb-1 md:mb-0">{plan.day}</span>
                         <div className="bg-slate-50 border border-slate-100 rounded-xl px-5 py-3 flex-1 shadow-inner">
-                          <span className="text-[14px] font-bold text-slate-700 leading-relaxed">{plan.task}</span>
+                          {isEditingContent ? (
+                            <input 
+                              type="text" 
+                              value={plan.task} 
+                              onChange={(e) => {
+                                const newPlan = [...(editBuffer.generatedContent?.weeklyPlan || [])];
+                                newPlan[idx] = { ...newPlan[idx], task: e.target.value };
+                                handleUpdateBuffer('weeklyPlan', newPlan, true);
+                              }}
+                              className="w-full text-[14px] font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
+                            />
+                          ) : (
+                            <span className="text-[14px] font-bold text-slate-700 leading-relaxed">{plan.task}</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -314,13 +407,56 @@ const ReportList: React.FC<ReportListProps> = ({
               </section>
 
               <section className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h4 className="text-[10px] font-black text-indigo-500 mb-4 uppercase tracking-widest">自習来塾提案日</h4>
+                <div className="flex flex-wrap gap-2">
+                  {['月', '火', '水', '木', '金', '土', '日'].map(day => {
+                    const currentDays = isEditingContent ? (editBuffer.proposedSelfStudyDays || []) : (selectedReport.proposedSelfStudyDays || []);
+                    const isProposed = Array.isArray(currentDays) ? currentDays.includes(day) : String(currentDays).includes(day);
+                    return (
+                      <button
+                        key={day}
+                        disabled={!isEditingContent}
+                        onClick={() => {
+                          if (!isEditingContent) return;
+                          const current = Array.isArray(editBuffer.proposedSelfStudyDays) ? editBuffer.proposedSelfStudyDays : [];
+                          const next = current.includes(day) ? current.filter(d => d !== day) : [...current, day];
+                          handleUpdateBuffer('proposedSelfStudyDays', next);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black border-2 transition-all ${isProposed ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-100'}`}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h4 className="text-[10px] font-black text-indigo-500 mb-4 uppercase tracking-widest">今後の課題と学習アドバイス</h4>
-                <p className="text-slate-700 text-sm font-bold leading-relaxed whitespace-pre-wrap">{selectedReport.generatedContent?.nextSteps || 'アドバイスなし'}</p>
+                {isEditingContent ? (
+                  <textarea 
+                    value={editBuffer.generatedContent?.nextSteps || ''} 
+                    onChange={(e) => handleUpdateBuffer('nextSteps', e.target.value, true)} 
+                    className="w-full text-sm p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold focus:bg-white outline-none" 
+                    rows={3} 
+                  />
+                ) : (
+                  <p className="text-slate-700 text-sm font-bold leading-relaxed whitespace-pre-wrap">{selectedReport.generatedContent?.nextSteps || 'アドバイスなし'}</p>
+                )}
               </section>
 
               <section className="bg-rose-50 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border border-rose-100 shadow-inner">
                 <h4 className="text-[10px] font-black text-rose-500 mb-4 uppercase tracking-widest">保護者様へのメッセージ</h4>
-                <p className="text-slate-800 text-sm md:text-[15px] font-bold italic leading-relaxed">「{selectedReport.generatedContent?.messageToParents || 'メッセージなし'}」</p>
+                {isEditingContent ? (
+                  <textarea 
+                    value={editBuffer.generatedContent?.messageToParents || ''} 
+                    onChange={(e) => handleUpdateBuffer('messageToParents', e.target.value, true)} 
+                    className="w-full text-sm p-4 bg-white/50 border border-rose-100 rounded-xl font-bold italic focus:bg-white outline-none" 
+                    rows={3} 
+                  />
+                ) : (
+                  <p className="text-slate-800 text-sm md:text-[15px] font-bold italic leading-relaxed">「{selectedReport.generatedContent?.messageToParents || 'メッセージなし'}」</p>
+                )}
               </section>
 
               <section className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm">

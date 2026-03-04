@@ -10,9 +10,11 @@ interface MessageCenterProps {
   onAddMessage: (reportId: string, text: string) => void;
   onDeleteMessage: (reportId: string, messageId: string) => void;
   onMarkResolved: (reportId: string) => void;
+  onUpdateReport?: (reportId: string, updates: Partial<Report>) => void;
+  onDeleteReport?: (reportId: string) => void;
 }
 
-const MessageCenter: React.FC<MessageCenterProps> = ({ reports, students, currentUser, onAddMessage, onDeleteMessage, onMarkResolved }) => {
+const MessageCenter: React.FC<MessageCenterProps> = ({ reports, students, currentUser, onAddMessage, onDeleteMessage, onMarkResolved, onUpdateReport, onDeleteReport }) => {
   // Only show reports that have messages and need action
   const pendingReports = reports.filter(r => r.needsAction);
   const getStudentName = (id: string) => students.find(s => s.id === id)?.name || '不明';
@@ -55,6 +57,8 @@ const MessageCenter: React.FC<MessageCenterProps> = ({ reports, students, curren
               onAddMessage={onAddMessage}
               onDeleteMessage={onDeleteMessage}
               onMarkResolved={onMarkResolved}
+              onUpdateReport={onUpdateReport}
+              onDeleteReport={onDeleteReport}
               showFilters={false} // リクエスト画面ではフィルタを非表示にし全件表示する
             />
           </div>

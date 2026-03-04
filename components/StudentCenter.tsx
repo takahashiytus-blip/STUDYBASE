@@ -15,6 +15,8 @@ interface StudentCenterProps {
   onAddMessage: (reportId: string, text: string) => void;
   onDeleteMessage: (reportId: string, messageId: string) => void;
   onMarkResolved: (reportId: string) => void;
+  onUpdateReport?: (reportId: string, updates: Partial<Report>) => void;
+  onDeleteReport?: (reportId: string) => void;
   onAddStudent?: (student: Omit<Student, 'id' | 'instructorIds'>) => void;
   onUpdateStudent?: (studentId: string, updates: Partial<Student>) => void;
   onDeleteStudent?: (studentId: string) => void;
@@ -22,7 +24,7 @@ interface StudentCenterProps {
 
 export const StudentCenter: React.FC<StudentCenterProps> = ({ 
   students, reports, allSessions, instructors, currentUser, 
-  onAddMessage, onDeleteMessage, onMarkResolved, onAddStudent, onUpdateStudent, onDeleteStudent 
+  onAddMessage, onDeleteMessage, onMarkResolved, onUpdateReport, onDeleteReport, onAddStudent, onUpdateStudent, onDeleteStudent 
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -326,6 +328,8 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                   onAddMessage={onAddMessage} 
                   onDeleteMessage={onDeleteMessage} 
                   onMarkResolved={onMarkResolved}
+                  onUpdateReport={onUpdateReport}
+                  onDeleteReport={onDeleteReport}
                   title={`${selectedStudent.name} さんの報告書`}
                 />
               </div>
