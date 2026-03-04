@@ -31,6 +31,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
   const studentReports = useMemo(() => reports.filter(r => r.studentId === selectedStudentId), [reports, selectedStudentId]);
   const isAdmin = currentUser.role === 'admin';
+  const isPrivileged = isAdmin || currentUser.role === 'instructor';
 
   // 重要：同期による削除への追従ロジック
   // 選択中の生徒がリストから消えた（他デバイスで削除された）場合、選択を解除する
@@ -94,7 +95,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Student List */}
-        <div className="lg:col-span-3 space-y-3">
+        <div className="lg:col-span-4 space-y-3">
           {students.map(student => (
             <button
               key={student.id}
@@ -105,11 +106,11 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                   : 'bg-white text-slate-700 border-slate-100 hover:border-indigo-200'
               }`}
             >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${selectedStudentId === student.id ? 'bg-white/20' : 'bg-indigo-50 text-indigo-600'}`}>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg ${selectedStudentId === student.id ? 'bg-white/20' : 'bg-indigo-50 text-indigo-600'}`}>
                 {student.name[0]}
               </div>
               <div className="min-w-0">
-                <p className="font-bold truncate">{student.name}</p>
+                <p className="font-bold text-lg truncate">{student.name}</p>
                 <p className={`text-[10px] font-black uppercase ${selectedStudentId === student.id ? 'text-indigo-200' : 'text-slate-400'}`}>{student.grade}</p>
               </div>
             </button>
@@ -117,7 +118,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
         </div>
 
         {/* Detailed View */}
-        <div className="lg:col-span-9">
+        <div className="lg:col-span-8">
           {selectedStudent ? (
             <div className="space-y-8 animate-slideUp">
               <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
@@ -146,7 +147,9 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div><label className="text-xs font-black text-slate-400 ml-1">氏名</label><input className={inputStyle} value={selectedStudent.name} onChange={e => onUpdateStudent?.(selectedStudent.id, { name: e.target.value })} /></div>
                       <div><label className="text-xs font-black text-slate-400 ml-1">学年</label><input className={inputStyle} value={selectedStudent.grade} onChange={e => onUpdateStudent?.(selectedStudent.id, { grade: e.target.value })} /></div>
-                      <div><label className="text-xs font-black text-slate-400 ml-1">志望校</label><input className={inputStyle} value={selectedStudent.targetSchool} onChange={e => onUpdateStudent?.(selectedStudent.id, { targetSchool: e.target.value })} /></div>
+                      <div><label className="text-xs font-black text-slate-400 ml-1">志望校</label><input className={inputStyle} value={selectedStudent.targetSchool || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { targetSchool: e.target.value })} /></div>
+                      <div><label className="text-xs font-black text-slate-400 ml-1">ログインID</label><input className={inputStyle} value={selectedStudent.loginId || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { loginId: e.target.value })} /></div>
+                      <div><label className="text-xs font-black text-slate-400 ml-1">パスワード</label><input className={inputStyle} value={selectedStudent.password || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { password: e.target.value })} /></div>
                       <div><label className="text-xs font-black text-slate-400 ml-1">StudyPlus ID</label><input className={inputStyle} value={selectedStudent.studyPlusId || ''} placeholder="連携用IDを入力" onChange={e => onUpdateStudent?.(selectedStudent.id, { studyPlusId: e.target.value })} /></div>
                       <div>
                         <label className="text-xs font-black text-slate-400 ml-1">志望系統</label>
@@ -155,7 +158,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                           {FACULTY_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
                       </div>
-                      <div className="md:col-span-2"><label className="text-xs font-black text-slate-400 ml-1">講師へのメッセージ</label><textarea className={inputStyle} rows={3} value={selectedStudent.weeklyInstructorMessage} onChange={e => onUpdateStudent?.(selectedStudent.id, { weeklyInstructorMessage: e.target.value })} /></div>
+                      <div className="md:col-span-2"><label className="text-xs font-black text-slate-400 ml-1">講師へのメッセージ</label><textarea className={inputStyle} rows={3} value={selectedStudent.weeklyInstructorMessage || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { weeklyInstructorMessage: e.target.value })} /></div>
                       
                       <div className="md:col-span-2 bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100">
                         <h4 className="text-sm font-black text-emerald-700 mb-4 flex items-center justify-between">
@@ -250,7 +253,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                           </span>
                         </h4>
                         <div className="h-48">
-                          <ResponsiveContainer width="100%" height="100%">
+                          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <BarChart data={stats?.last7Days}>
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                               <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
@@ -302,6 +305,13 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                           <span className="text-sm font-bold text-slate-400">Score</span>
                         </div>
                         <p className="text-xs text-slate-500 mt-2 font-medium">英単語王ベスト: {selectedStudent.wordKingBest || 0}語</p>
+                        {isPrivileged && (
+                          <div className="mt-4 pt-4 border-t border-slate-200 space-y-1">
+                            <p className="text-[9px] font-black text-slate-400 uppercase">Account Info</p>
+                            <p className="text-xs font-bold text-slate-600">ID: <span className="font-mono">{selectedStudent.loginId || '未設定'}</span></p>
+                            <p className="text-xs font-bold text-slate-600">PW: <span className="font-mono">{selectedStudent.password || '未設定'}</span></p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

@@ -32,7 +32,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
       subject: '',   
       studentId: '', 
       instructorId: '',
-      room: ''       
+      room: '',
+      lessonType: 'individual',
+      groupName: ''
     };
     onUpdate([...timetable, newEntry]);
   };
@@ -56,9 +58,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
    */
   const handleSaveAll = async () => {
     // 1. バリデーションチェック
-    const incompleteEntries = timetable.filter(t => 
-      !t.studentId || !t.instructorId || !t.startTime || !t.endTime || !t.subject
-    );
+    const incompleteEntries = timetable.filter(t => {
+      const isIndividual = !t.lessonType || t.lessonType === 'individual';
+      if (isIndividual) {
+        return !t.studentId || !t.instructorId || !t.startTime || !t.endTime || !t.subject;
+      } else {
+        // 集団授業の場合は生徒IDは不要だが、授業名が必要
+        return !t.groupName || !t.instructorId || !t.startTime || !t.endTime || !t.subject;
+      }
+    });
 
     if (incompleteEntries.length > 0) {
       alert('未入力の項目がある授業枠があります。全ての項目を埋めるか、不要な枠を削除してから保存してください。');
@@ -114,7 +122,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
             
             <div className="space-y-6 min-h-[650px] bg-slate-100/50 p-4 rounded-[2.5rem] border-2 border-dashed border-slate-200">
               {timetable.filter(t => t.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime)).map(item => (
-                <div key={item.id} className="bg-white p-6 rounded-[2.2rem] border border-slate-200 shadow-md relative group transition-all border-l-8 border-l-indigo-500">
+                <div key={item.id} className={`bg-white p-6 rounded-[2.2rem] border shadow-md relative group transition-all border-l-8 ${
+                  item.lessonType === 'group' ? 'border-l-emerald-500 border-emerald-100' : 'border-l-indigo-500 border-slate-200'
+                }`}>
                    
                    <button 
                      type="button"
@@ -124,6 +134,22 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                    >
                      <span className="text-xl font-black">✕</span>
                    </button>
+
+                   {/* 授業タイプ切り替え */}
+                   <div className="flex bg-slate-100 p-1 rounded-xl mb-5">
+                     <button 
+                       onClick={() => handleEdit(item.id, { lessonType: 'individual' })}
+                       className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${(!item.lessonType || item.lessonType === 'individual') ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                     >
+                       個別指導
+                     </button>
+                     <button 
+                       onClick={() => handleEdit(item.id, { lessonType: 'group' })}
+                       className={`flex-1 py-1.5 rounded-lg text-[10px] font-black transition-all ${item.lessonType === 'group' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400'}`}
+                     >
+                       集団授業
+                     </button>
+                   </div>
 
                    <div className="grid grid-cols-2 gap-4 mb-5">
                       <div className="space-y-1.5">
@@ -172,17 +198,30 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                    </div>
 
                    <div className="space-y-4">
-                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">生徒名</label>
-                        <select 
-                            value={item.studentId || ''} 
-                            onChange={e => handleEdit(item.id, { studentId: e.target.value })}
-                            className={selectBaseStyle + (!item.studentId ? " border-rose-200 bg-rose-50 text-rose-500" : "")}
-                        >
-                          <option value="">-- 未選択 --</option>
-                          {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
-                        </select>
-                     </div>
+                     {(!item.lessonType || item.lessonType === 'individual') ? (
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-400 uppercase ml-1">生徒名</label>
+                          <select 
+                              value={item.studentId || ''} 
+                              onChange={e => handleEdit(item.id, { studentId: e.target.value })}
+                              className={selectBaseStyle + (!item.studentId ? " border-rose-200 bg-rose-50 text-rose-500" : "")}
+                          >
+                            <option value="">-- 未選択 --</option>
+                            {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
+                          </select>
+                       </div>
+                     ) : (
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">授業名・クラス名</label>
+                          <input 
+                            type="text"
+                            placeholder="例: 中3数学集団"
+                            value={item.groupName || ''}
+                            onChange={e => handleEdit(item.id, { groupName: e.target.value })}
+                            className={selectBaseStyle + (!item.groupName ? " border-rose-200 bg-rose-50" : " border-emerald-100 bg-emerald-50/30")}
+                          />
+                       </div>
+                     )}
 
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-indigo-400 uppercase ml-1">担当講師</label>

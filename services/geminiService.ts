@@ -117,7 +117,8 @@ export const generateInterviewMaterial = async (
   mockExams: any[],
   location: string,
   targetSchool?: string,
-  targetFaculty?: string
+  targetFaculty?: string,
+  previousRecords?: any[]
 ) => {
   return withRetry(async () => {
     const ai = getAI();
@@ -126,7 +127,8 @@ export const generateInterviewMaterial = async (
       contents: `生徒「${studentName}」の面談資料を生成。
       学年: ${grade}, 志望校: ${targetSchool || "未定"}, 志望学部: ${targetFaculty || "未定"}, 地域: ${location}
       過去の指導報告: ${JSON.stringify(reports)}
-      模試成績: ${JSON.stringify(mockExams)}`,
+      模試成績: ${JSON.stringify(mockExams)}
+      過去の面談記録: ${JSON.stringify(previousRecords || [])}`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {

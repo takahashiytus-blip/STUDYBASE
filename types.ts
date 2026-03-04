@@ -17,6 +17,7 @@ export interface Student {
   studyPlusId?: string; // StudyPlus連携用ID
   studyPlusMinutes?: Record<string, Record<string, number>>; // 日付ごとのStudyPlus学習時間 (YYYY-MM-DD -> { subject -> minutes })
   studyPlusLastSynced?: string; // 最終同期日時
+  parentName?: string; // 保護者名
   targets?: {
     label1: string;
     date1: string;
@@ -45,6 +46,7 @@ export interface Instructor {
   specialty: string;
   loginId?: string;
   password?: string;
+  canGenerateInterviewMaterial?: boolean; // 面談資料作成権限
 }
 
 export interface ReportMessage {
@@ -114,6 +116,8 @@ export interface TimetableEntry {
   studentId?: string;
   instructorId?: string;
   room?: string;
+  lessonType?: 'individual' | 'group'; // 個別 or 集団
+  groupName?: string; // 集団授業名
 }
 
 export interface AdminConfig {
@@ -124,6 +128,29 @@ export interface AdminConfig {
   wordKingClassroomRecord: number;
   wordKingClassroomHolder: string;
   passwordHash?: string;
+}
+
+export interface InterviewSlot {
+  id: string;
+  interviewerId: string; // admin or instructor id
+  interviewerName: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  status: 'available' | 'booked' | 'confirmed';
+  studentId?: string;
+  studentName?: string;
+  parentName?: string;
+  note?: string;
+}
+
+export interface InterviewRecord {
+  id: string;
+  studentId: string;
+  date: string;
+  interviewerName: string;
+  content: string; // 面談内容のメモ
+  nextActions: string; // 次回までのアクション
 }
 
 export interface AppState {
@@ -137,4 +164,6 @@ export interface AppState {
   reports: Report[];
   mockExams: MockExam[];
   adminConfig: AdminConfig;
+  interviewSlots: InterviewSlot[];
+  interviewRecords: InterviewRecord[];
 }

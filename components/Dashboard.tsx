@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend } from 'recharts';
-import { Report, Student, UserRole, StudySession, MockExam, TimetableEntry, Instructor } from '../types';
+import { Report, Student, UserRole, StudySession, MockExam, TimetableEntry, Instructor, InterviewSlot, InterviewRecord } from '../types';
 import { parseSafeDate, getLocalISOString } from '../utils';
 import { SUBJECT_CONFIG, JHS_SUBJECTS, HS_SUBJECTS } from '../constants';
 
@@ -16,8 +16,10 @@ interface DashboardProps {
   allSessions: StudySession[];
   onLogSession: (session: StudySession) => void;
   timetable: TimetableEntry[];
-  onUpdateTimetable: (newTimetable: TimetableEntry[]) => void;
+  onUpdateTimetable: (newTimetable: TimetableEntry[], deletedIds?: string[]) => void;
   onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
+  interviewSlots: InterviewSlot[];
+  interviewRecords: InterviewRecord[];
 }
 
 const calculateRemainingDays = (targetDateStr: string) => {
@@ -43,9 +45,11 @@ const Dashboard: React.FC<DashboardProps> = ({
   currentUserId,
   allSessions, 
   onLogSession,
-  timetable,
+  timetable = [],
   onUpdateTimetable,
-  onUpdateStudent
+  onUpdateStudent,
+  interviewSlots = [],
+  interviewRecords = []
 }) => {
   const isPrivileged = role === 'instructor' || role === 'admin';
   const isAdmin = role === 'admin';
@@ -272,11 +276,26 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [reports, role, currentUserId]);
 
   const todayDayOfWeek = new Date().getDay();
+  
+  const upcomingInterviews = useMemo(() => {
+    const now = new Date();
+    return (interviewSlots || [])
+      .filter(s => {
+        const isParticipant = role === 'admin' || s.interviewerId === currentUserId || s.studentId === (currentUserStudent?.id || currentUserId);
+        const isBooked = s.status === 'booked' || s.status === 'confirmed';
+        const isFuture = new Date(s.date) >= new Date(now.setHours(0,0,0,0));
+        return isParticipant && isBooked && isFuture;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+      .slice(0, 3);
+  }, [interviewSlots, role, currentUserId, currentUserStudent]);
+
   const myTimetable = useMemo(() => {
-    if (isAdmin) return [...timetable].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
-    if (role === 'instructor') return timetable.filter(t => t.instructorId === currentUserId).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+    const safeTimetable = timetable || [];
+    if (isAdmin) return [...safeTimetable].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+    if (role === 'instructor') return safeTimetable.filter(t => t.instructorId === currentUserId).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
     const sid = currentUserStudent?.id || currentUserId;
-    return timetable.filter(t => t.studentId === sid).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+    return safeTimetable.filter(t => t.studentId === sid).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
   }, [timetable, currentUserId, isAdmin, role, currentUserStudent]);
 
   const currentSubjectList = isHS ? HS_SUBJECTS : JHS_SUBJECTS;
@@ -413,15 +432,22 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <div className="space-y-2 flex-1">
                   {dayItems.length === 0 ? (<div className="h-full flex items-center justify-center opacity-20"><span className="text-[10px] font-bold">---</span></div>) : 
                     dayItems.map(item => (
-                      <div key={item.id} className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
-                        <span className="text-[8px] font-black text-indigo-500 leading-none mb-1 uppercase">{item.startTime}</span>
+                      <div key={item.id} className={`p-2 rounded-xl shadow-sm border flex flex-col items-center text-center ${item.lessonType === 'group' ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-slate-100'}`}>
+                        <span className={`text-[8px] font-black leading-none mb-1 uppercase ${item.lessonType === 'group' ? 'text-emerald-600' : 'text-indigo-500'}`}>{item.startTime}</span>
                         <span className="text-[10px] font-black text-slate-800 leading-tight">{item.subject}</span>
-                        {(isAdmin || role === 'instructor') && (
-                          <div className="mt-1 flex flex-col gap-0.5 leading-none overflow-hidden border-t border-slate-50 pt-1">
-                            <span className="text-[7px] text-slate-500 font-bold truncate w-full">{students.find(s => s.id === item.studentId)?.name}</span>
-                            <span className="text-[6px] text-slate-400 font-medium truncate w-full">{students.find(s => s.id === item.studentId)?.grade}</span>
-                            {isAdmin && (<span className="text-[6px] text-indigo-300 font-bold truncate w-full mt-0.5">{instructors.find(i => i.id === item.instructorId)?.name}</span>)}
+                        {item.lessonType === 'group' ? (
+                          <div className="mt-1 flex flex-col gap-0.5 leading-none overflow-hidden border-t border-emerald-100 pt-1">
+                            <span className="text-[7px] text-emerald-700 font-black truncate w-full">{item.groupName || '集団授業'}</span>
+                            {isAdmin && (<span className="text-[6px] text-emerald-500 font-bold truncate w-full mt-0.5">{instructors.find(i => i.id === item.instructorId)?.name}</span>)}
                           </div>
+                        ) : (
+                          (isAdmin || role === 'instructor') && (
+                            <div className="mt-1 flex flex-col gap-0.5 leading-none overflow-hidden border-t border-slate-50 pt-1">
+                              <span className="text-[7px] text-slate-500 font-bold truncate w-full">{students.find(s => s.id === item.studentId)?.name}</span>
+                              <span className="text-[6px] text-slate-400 font-medium truncate w-full">{students.find(s => s.id === item.studentId)?.grade}</span>
+                              {isAdmin && (<span className="text-[6px] text-indigo-300 font-bold truncate w-full mt-0.5">{instructors.find(i => i.id === item.instructorId)?.name}</span>)}
+                            </div>
+                          )
                         )}
                       </div>
                     ))
@@ -493,7 +519,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                  </div>
               </div>
               <div className="h-64 mb-6">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="dateLabel" fontSize={10} tickLine={false} axisLine={false} />
@@ -545,6 +571,29 @@ const Dashboard: React.FC<DashboardProps> = ({
             )}
           </div>
           <div className="space-y-8">
+            {upcomingInterviews.length > 0 && (
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span>🗓️</span> 次回の面談予定
+                </h4>
+                <div className="space-y-3">
+                  {upcomingInterviews.map(slot => (
+                    <div key={slot.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-black text-slate-400">{slot.date}</span>
+                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${slot.status === 'confirmed' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                          {slot.status === 'confirmed' ? '確定' : '予約中'}
+                        </span>
+                      </div>
+                      <p className="text-sm font-black text-slate-800">{slot.startTime} 〜 {slot.endTime}</p>
+                      <p className="text-[10px] font-bold text-slate-500">
+                        {role === 'student' || role === 'parent' ? `担当: ${slot.interviewerName}` : `対象: ${slot.studentName} 様`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {currentUserStudent?.weeklyInstructorMessage && (<div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-200 shadow-md"><h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👨‍🏫</span> 講師からの言葉</h4><p className="text-sm font-bold text-slate-800 leading-relaxed italic">「{currentUserStudent.weeklyInstructorMessage}」</p></div>)}
             <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-lg"><h4 className="text-[10px] font-black text-indigo-100 uppercase mb-4">Study Advisor</h4><p className="text-[15px] font-bold leading-relaxed italic text-white drop-shadow-sm">「目標に向かって、一歩ずつ進んでいきましょう。継続は力なり！」</p></div>
           </div>

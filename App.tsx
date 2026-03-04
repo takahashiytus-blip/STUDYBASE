@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult } from './types';
+import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult, InterviewSlot, InterviewRecord } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { generateUniqueId, getLocalISOString, parseSafeDate } from './utils';
@@ -18,6 +18,8 @@ import { TimetableManager } from './components/TimetableManager';
 import AdminSettings from './components/AdminSettings';
 import MessageCenter from './components/MessageCenter';
 import InstructorCenter from './components/InstructorCenter';
+import AccountSettings from './components/AccountSettings';
+import { InterviewManagement } from './components/InterviewManagement';
 
 export { getLocalISOString, parseSafeDate };
 
@@ -55,6 +57,8 @@ const App: React.FC = () => {
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
   const [allSessions, setAllSessions] = useState<StudySession[]>([]);
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(DEFAULT_ADMIN);
+  const [interviewSlots, setInterviewSlots] = useState<InterviewSlot[]>([]);
+  const [interviewRecords, setInterviewRecords] = useState<InterviewRecord[]>([]);
 
   // セッション復元
   useEffect(() => {
@@ -80,10 +84,13 @@ const App: React.FC = () => {
       localStorage.setItem('sb_data_sessions', JSON.stringify(allSessions));
       localStorage.setItem('sb_data_timetable', JSON.stringify(timetable));
       localStorage.setItem('study_base_admin_config', JSON.stringify(adminConfig));
+      localStorage.setItem('sb_data_interview_slots', JSON.stringify(interviewSlots));
+      localStorage.setItem('sb_data_interview_records', JSON.stringify(interviewRecords));
     }
-  }, [students, instructors, reports, mockExams, allSessions, timetable, adminConfig]);
+  }, [students, instructors, reports, mockExams, allSessions, timetable, adminConfig, interviewSlots, interviewRecords]);
 
   const isUpdatingRef = useRef<boolean>(false);
+  const isFetchingRef = useRef<boolean>(false);
   const updateTimeoutRef = useRef<number | null>(null);
   const syncPendingRef = useRef<boolean>(false);
 
@@ -93,21 +100,26 @@ const App: React.FC = () => {
   };
 
   const fetchAllData = useCallback(async (isSilent = false) => {
-    if (isUpdatingRef.current) {
+    if (isFetchingRef.current || isUpdatingRef.current) {
       syncPendingRef.current = true;
       return;
     }
 
+    isFetchingRef.current = true;
     if (!isSupabaseConfigured || !supabase) {
       if (!isSilent) {
         const localReports = localStorage.getItem('sb_data_reports');
         const localStudents = localStorage.getItem('sb_data_students');
         const localInstructors = localStorage.getItem('sb_data_instructors');
+        const localSlots = localStorage.getItem('sb_data_interview_slots');
+        const localRecords = localStorage.getItem('sb_data_interview_records');
         const savedAdmin = localStorage.getItem('study_base_admin_config');
 
         setReports(localReports ? JSON.parse(localReports) : MOCK_REPORTS);
         setStudents(localStudents ? JSON.parse(localStudents) : MOCK_STUDENTS);
         setInstructors(localInstructors ? JSON.parse(localInstructors) : MOCK_INSTRUCTORS);
+        setInterviewSlots(localSlots ? JSON.parse(localSlots) : []);
+        setInterviewRecords(localRecords ? JSON.parse(localRecords) : []);
         setTimetable(MOCK_TIMETABLE);
         if (savedAdmin) setAdminConfig(JSON.parse(savedAdmin));
         setIsLoading(false);
@@ -124,7 +136,9 @@ const App: React.FC = () => {
         { data: reportData, error: reportError },
         { data: mockData, error: mockError },
         { data: timetableData, error: timetableError },
-        { data: sessionData, error: sessionError }
+        { data: sessionData, error: sessionError },
+        { data: slotsData, error: slotsError },
+        { data: recordsData, error: recordsError }
       ] = await Promise.all([
         supabase.from('admin_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('students').select('*'),
@@ -132,28 +146,38 @@ const App: React.FC = () => {
         supabase.from('reports').select('*').order('date', { ascending: false }),
         supabase.from('mock_exams').select('*').order('exam_date', { ascending: false }),
         supabase.from('timetable').select('*'),
-        supabase.from('study_sessions').select('*').order('date', { ascending: false })
+        supabase.from('study_sessions').select('*').order('date', { ascending: false }),
+        supabase.from('interview_slots').select('*'),
+        supabase.from('interview_records').select('*')
       ]);
 
-      if (adminError || studentError || instructorError || reportError || mockError || timetableError || sessionError) {
-        console.error("[Sync] Error fetching data:", { adminError, studentError, instructorError, reportError, mockError, timetableError, sessionError });
+      // PGRST205 (Table not found) は無視して空配列として扱う
+      const filteredSlotsError = slotsError?.code === 'PGRST205' ? null : slotsError;
+      const filteredRecordsError = recordsError?.code === 'PGRST205' ? null : recordsError;
+
+      if (adminError || studentError || instructorError || reportError || mockError || timetableError || sessionError || filteredSlotsError || filteredRecordsError) {
+        console.error("[Sync] Error fetching data:", { 
+          adminError, studentError, instructorError, reportError, mockError, timetableError, sessionError, 
+          slotsError: filteredSlotsError, recordsError: filteredRecordsError 
+        });
       } else {
         console.log(`[Sync] Successfully fetched: ${instructorData?.length} instructors, ${studentData?.length} students`);
       }
 
-      const validInstructorIds = new Set((instructorData || []).map(i => i.id));
-      const validStudentIds = new Set((studentData || []).map(s => s.id));
+      const validInstructorIds = new Set((instructorData || []).map((i: any) => i.id));
+      const validStudentIds = new Set((studentData || []).map((s: any) => s.id));
 
       if (instructorData) {
-        setInstructors(instructorData.map(i => ({ 
+        setInstructors(instructorData.map((i: any) => ({ 
           id: i.id, name: i.name, specialty: i.specialty, 
           loginId: i.login_id ?? i.loginId, 
-          password: i.password 
+          password: i.password,
+          canGenerateInterviewMaterial: i.can_generate_interview_material ?? i.canGenerateInterviewMaterial ?? false
         })));
       }
       
       if (studentData) {
-        setStudents(studentData.map(s => {
+        setStudents(studentData.map((s: any) => {
           const rawIds = s.instructor_ids ?? s.instructorIds ?? [];
           const cleanInstructorIds = rawIds.filter((id: string) => validInstructorIds.has(id));
           return {
@@ -169,6 +193,7 @@ const App: React.FC = () => {
             studyPlusId: s.study_plus_id ?? s.studyPlusId,
             studyPlusMinutes: s.study_plus_minutes ?? s.studyPlusMinutes ?? {},
             studyPlusLastSynced: s.study_plus_last_synced ?? s.studyPlusLastSynced,
+            parentName: s.parent_name ?? s.parentName,
             targets: s.targets ?? undefined
           };
         }));
@@ -187,8 +212,8 @@ const App: React.FC = () => {
 
       if (reportData) {
         setReports(reportData
-          .filter(r => validStudentIds.has(r.student_id ?? r.studentId))
-          .map(r => ({
+          .filter((r: any) => validStudentIds.has(r.student_id ?? r.studentId))
+          .map((r: any) => ({
             id: r.id, studentId: r.student_id ?? r.studentId, date: r.date, subject: r.subject, 
             instructorName: r.instructor_name ?? r.instructorName,
             sessionYear: r.session_year ?? r.sessionYear, sessionMonth: r.session_month ?? r.sessionMonth, sessionCount: r.session_count ?? r.sessionCount,
@@ -205,8 +230,8 @@ const App: React.FC = () => {
 
       if (mockData) {
         setMockExams(mockData
-          .filter(m => validStudentIds.has(m.student_id ?? m.studentId))
-          .map(m => ({ 
+          .filter((m: any) => validStudentIds.has(m.student_id ?? m.studentId))
+          .map((m: any) => ({ 
             id: m.id, studentId: m.student_id ?? m.studentId, examName: m.exam_name ?? m.examName, 
             examDate: m.exam_date ?? m.examDate, scores: m.scores ?? {} 
           }))
@@ -215,31 +240,61 @@ const App: React.FC = () => {
 
       if (timetableData) {
         setTimetable(timetableData
-          .filter(t => {
+          .filter((t: any) => {
             const sid = t.student_id ?? t.studentId;
             const iid = t.instructor_id ?? t.instructorId;
             return validStudentIds.has(sid) && (iid ? validInstructorIds.has(iid) : true);
           })
-          .map(t => ({ 
+          .map((t: any) => ({ 
             id: t.id, dayOfWeek: t.day_of_week ?? t.dayOfWeek, startTime: t.start_time ?? t.startTime, 
             endTime: t.end_time ?? t.endTime, subject: t.subject, studentId: t.student_id ?? t.studentId, 
-            instructorId: t.instructor_id ?? t.instructorId, room: t.room 
+            instructorId: t.instructor_id ?? t.instructorId, room: t.room,
+            lessonType: t.lesson_type ?? t.lessonType ?? 'individual',
+            groupName: t.group_name ?? t.groupName ?? ''
           }))
         );
       }
 
       if (sessionData) {
         setAllSessions(sessionData
-          .filter(s => validStudentIds.has(s.student_id ?? s.studentId))
-          .map(s => ({ 
+          .filter((s: any) => validStudentIds.has(s.student_id ?? s.studentId))
+          .map((s: any) => ({ 
             id: s.id, studentId: s.student_id ?? s.studentId, date: s.date, subject: s.subject, minutes: s.minutes 
           }))
         );
       }
 
+      if (slotsData) {
+        setInterviewSlots(slotsData.map((s: any) => ({
+          id: s.id, 
+          interviewerId: s.interviewer_id ?? s.interviewerId, 
+          interviewerName: s.interviewer_name ?? s.interviewerName,
+          date: s.date, 
+          startTime: s.start_time ?? s.startTime, 
+          endTime: s.end_time ?? s.endTime,
+          status: s.status, 
+          studentId: s.student_id ?? s.studentId, 
+          studentName: s.student_name ?? s.studentName,
+          parentName: s.parent_name ?? s.parentName, 
+          note: s.note
+        })));
+      }
+
+      if (recordsData) {
+        setInterviewRecords(recordsData.map((r: any) => ({
+          id: r.id, 
+          studentId: r.student_id ?? r.studentId, 
+          date: r.date,
+          interviewerName: r.interviewer_name ?? r.interviewerName, 
+          content: r.content, 
+          nextActions: r.next_actions ?? r.nextActions
+        })));
+      }
+
     } catch (err) {
-      console.warn("Sync overlap prevented.");
+      console.warn("Sync overlap prevented or error occurred:", err);
     } finally {
+      isFetchingRef.current = false;
       setIsLoading(false);
       if (syncPendingRef.current) {
         syncPendingRef.current = false;
@@ -341,11 +396,15 @@ const App: React.FC = () => {
       let latestConfig: AdminConfig = { ...adminConfig, ...updates };
       setAdminConfig(latestConfig);
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('admin_config').update({
-          name: latestConfig.name, login_id: latestConfig.loginId, password_hash: latestConfig.passwordHash,
-          location: latestConfig.location, word_king_record: latestConfig.wordKingClassroomRecord,
+        await supabase.from('admin_config').upsert({
+          id: 1,
+          name: latestConfig.name, 
+          login_id: latestConfig.loginId, 
+          password_hash: latestConfig.passwordHash,
+          location: latestConfig.location, 
+          word_king_record: latestConfig.wordKingClassroomRecord,
           word_king_holder: latestConfig.wordKingClassroomHolder
-        }).eq('id', 1);
+        }, { onConflict: 'id' });
       }
       showToast('システム設定を更新しました');
     } finally { endUpdate(); }
@@ -516,7 +575,8 @@ const App: React.FC = () => {
         }
         const upsertData = newTimetable.map(t => ({
           id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
-          subject: t.subject, student_id: t.studentId, instructor_id: t.instructorId, room: t.room
+          subject: t.subject, student_id: t.studentId || null, instructor_id: t.instructorId, room: t.room,
+          lesson_type: t.lessonType || 'individual', group_name: t.groupName || ''
         }));
         if (upsertData.length > 0) {
           await supabase.from('timetable').upsert(upsertData, { onConflict: 'id' });
@@ -536,7 +596,8 @@ const App: React.FC = () => {
       setInstructors(prev => [...prev, newIns]);
       if (isSupabaseConfigured && supabase) {
         await supabase.from('instructors').insert({ 
-          id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password 
+          id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password,
+          can_generate_interview_material: d.canGenerateInterviewMaterial || false
         });
       }
       showToast('講師を登録しました');
@@ -549,11 +610,15 @@ const App: React.FC = () => {
       setInstructors(prev => prev.map(i => i.id === id ? { ...i, ...upd } : i));
       if (isSupabaseConfigured && supabase) {
         const dbUpd: any = {};
-        if (upd.name) dbUpd.name = upd.name;
-        if (upd.specialty) dbUpd.specialty = upd.specialty;
-        if (upd.loginId) dbUpd.login_id = upd.loginId;
-        if (upd.password) dbUpd.password = upd.password;
-        await supabase.from('instructors').update(dbUpd).eq('id', id);
+        if (upd.name !== undefined) dbUpd.name = upd.name;
+        if (upd.specialty !== undefined) dbUpd.specialty = upd.specialty;
+        if (upd.loginId !== undefined) dbUpd.login_id = upd.loginId;
+        if (upd.password !== undefined) dbUpd.password = upd.password;
+        if (upd.canGenerateInterviewMaterial !== undefined) dbUpd.can_generate_interview_material = upd.canGenerateInterviewMaterial;
+        
+        if (Object.keys(dbUpd).length > 0) {
+          await supabase.from('instructors').update(dbUpd).eq('id', id);
+        }
       }
       showToast('講師情報を更新しました');
     } finally { endUpdate(); }
@@ -653,15 +718,83 @@ const App: React.FC = () => {
     } finally { endUpdate(); }
   };
 
+  const handleUpdateInterviewSlots = async (newSlots: InterviewSlot[], deletedIds?: string[]) => {
+    startUpdate();
+    try {
+      setInterviewSlots(newSlots);
+      if (isSupabaseConfigured && supabase) {
+        if (deletedIds && deletedIds.length > 0) {
+          await supabase.from('interview_slots').delete().in('id', deletedIds);
+        }
+        const upsertData = newSlots.map(s => ({
+          id: s.id, interviewer_id: s.interviewerId, interviewer_name: s.interviewerName,
+          date: s.date, start_time: s.startTime, end_time: s.endTime,
+          status: s.status, student_id: s.studentId || null, student_name: s.studentName || null,
+          parent_name: s.parentName || null, note: s.note || null
+        }));
+        if (upsertData.length > 0) {
+          await supabase.from('interview_slots').upsert(upsertData, { onConflict: 'id' });
+        }
+      }
+    } finally { endUpdate(); }
+  };
+
+  const handleUpdateInterviewRecords = async (newRecords: InterviewRecord[], deletedIds?: string[]) => {
+    startUpdate();
+    try {
+      setInterviewRecords(newRecords);
+      if (isSupabaseConfigured && supabase) {
+        if (deletedIds && deletedIds.length > 0) {
+          await supabase.from('interview_records').delete().in('id', deletedIds);
+        }
+        const upsertData = newRecords.map(r => ({
+          id: r.id, student_id: r.studentId, date: r.date,
+          interviewer_name: r.interviewerName, content: r.content, next_actions: r.nextActions
+        }));
+        if (upsertData.length > 0) {
+          await supabase.from('interview_records').upsert(upsertData, { onConflict: 'id' });
+        }
+      }
+    } finally { endUpdate(); }
+  };
+
   const renderContent = () => {
     const activeStudent = students.find(s => s.id === currentUser.id);
     switch (activeTab) {
-      case 'dashboard': return <Dashboard reports={reports} students={students} instructors={instructors} role={currentUser.role} mockExams={mockExams} currentUserStudent={activeStudent} currentUserId={currentUser.id} allSessions={allSessions} onLogSession={handleLogSession} timetable={timetable} onUpdateTimetable={handleUpdateTimetable} onUpdateStudent={handleUpdateStudent} />;
+      case 'dashboard': return <Dashboard 
+          reports={reports} 
+          students={students} 
+          instructors={instructors} 
+          role={currentUser.role} 
+          mockExams={mockExams} 
+          currentUserStudent={activeStudent} 
+          currentUserId={currentUser.id} 
+          allSessions={allSessions} 
+          onLogSession={handleLogSession} 
+          timetable={timetable} 
+          onUpdateTimetable={handleUpdateTimetable} 
+          onUpdateStudent={handleUpdateStudent}
+          interviewSlots={interviewSlots}
+          interviewRecords={interviewRecords}
+        />;
       case 'create': return <ReportForm students={students} currentUser={currentUser} onSave={handleSaveReport} />;
       case 'reports': return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} />;
       case 'word-king': return <WordKing classroomBest={adminConfig.wordKingClassroomRecord} classroomHolder={adminConfig.wordKingClassroomHolder} userId={currentUser.id} personalBestFromDB={activeStudent?.wordKingBest || 0} onPersonalBestUpdate={handleUpdateWordKingBest} onNewClassroomRecord={(record, holder) => { handleUpdateAdminConfig({ wordKingClassroomRecord: record, wordKingClassroomHolder: holder }); showToast('校舎新記録を樹立しました！👑'); }} />;
       case 'iq-test': return <IQTest studentName={currentUser.name} grade={activeStudent?.grade || ""} userId={currentUser.id} iqHistory={activeStudent?.iqHistory || []} onComplete={handleSaveIQ} />;
-      case 'interview': return <InterviewCenter students={students} reports={reports} mockExams={mockExams} adminConfig={adminConfig} />;
+      case 'interview': 
+        const canGenerate = currentUser.role === 'admin' || 
+          (currentUser.role === 'instructor' && instructors.find(i => i.id === currentUser.id)?.canGenerateInterviewMaterial === true);
+        return <InterviewCenter 
+          students={students} 
+          reports={reports} 
+          mockExams={mockExams} 
+          adminConfig={adminConfig} 
+          canGenerate={canGenerate} 
+          interviewRecords={interviewRecords}
+          interviewSlots={interviewSlots}
+        />;
+      case 'interview-management':
+        return <InterviewManagement slots={interviewSlots} records={interviewRecords} students={students} instructors={instructors} currentUser={currentUser} onUpdateSlots={handleUpdateInterviewSlots} onUpdateRecords={handleUpdateInterviewRecords} />;
       case 'students': return <StudentCenter students={students} reports={reports} allSessions={allSessions} instructors={instructors} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
       case 'instructors': return <InstructorCenter instructors={instructors} students={students} onAssignStudent={async (sid, iid) => {
           const s = students.find(std => std.id === sid);
@@ -676,6 +809,7 @@ const App: React.FC = () => {
       case 'mock': return <MockExamCenter students={students} mockExams={mockExams} role={currentUser.role} currentUserId={currentUser.id} onSave={handleAddMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />;
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={handleUpdateTimetable} />;
+      case 'account': return <AccountSettings currentUser={currentUser} students={students} instructors={instructors} adminConfig={adminConfig} onUpdateStudent={handleUpdateStudent} onUpdateInstructor={handleUpdateInstructor} onUpdateAdminConfig={handleUpdateAdminConfig} />;
       case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} />;
       default: return <div className="p-10 text-center text-slate-400 font-bold italic">Module not found.</div>;
     }

@@ -84,7 +84,16 @@ export const WordKing: React.FC<WordKingProps> = ({
   }, [gameState, score, personalBestFromDB, classroomBest, onPersonalBestUpdate, onNewClassroomRecord]);
 
   const handleAnswer = (choice: string) => {
-    if (choice === currentQ?.answer) {
+    if (!currentQ) return;
+
+    const selected = choice.trim();
+    const correct1 = currentQ.answer.trim();
+    const correct2 = currentQ.choices[0].trim();
+
+    // 複数の判定基準で正解をチェック（データの不備に強い設計）
+    const isCorrect = selected === correct1 || selected === correct2;
+
+    if (isCorrect) {
       setScore(prev => prev + 1);
       setFeedback('correct');
       setTimeout(() => {
@@ -176,7 +185,7 @@ export const WordKing: React.FC<WordKingProps> = ({
 
         <div className="flex-1 flex flex-col items-center justify-center z-10 py-12">
           <p className="text-slate-300 font-black text-[10px] uppercase tracking-[0.5em] mb-6">Translation Challenge</p>
-          <h3 className="text-6xl md:text-8xl font-black mb-16 tracking-tighter text-slate-900 drop-shadow-sm uppercase">{currentQ.word}</h3>
+          <h3 className="text-6xl md:text-8xl font-black mb-16 tracking-tighter text-slate-900 drop-shadow-sm">{currentQ.word}</h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-3xl px-4">
             {shuffledChoices.map((c, i) => (

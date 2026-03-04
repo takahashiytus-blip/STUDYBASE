@@ -66,7 +66,7 @@ export const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports
         </div>
         <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
            <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))} className="bg-transparent px-4 py-2 font-black outline-none text-sm text-slate-600">
-             {[2024, 2025].map(y => <option key={y} value={y}>{y}年</option>)}
+             {Array.from({length: new Date().getFullYear() - 2024 + 2}, (_, i) => 2024 + i).map(y => <option key={y} value={y}>{y}年</option>)}
            </select>
            <div className="w-[1px] bg-slate-100 my-2"></div>
            <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="bg-transparent px-4 py-2 font-black outline-none text-sm text-indigo-600">

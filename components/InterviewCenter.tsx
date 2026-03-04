@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Student, Report, MockExam, AdminConfig } from '../types';
+import { Student, Report, MockExam, AdminConfig, InterviewRecord, InterviewSlot } from '../types';
 import { generateInterviewMaterial } from '../services/geminiService';
 import { getLocalISOString, parseSafeDate } from '../utils';
 
@@ -9,9 +9,20 @@ interface InterviewCenterProps {
   reports: Report[];
   mockExams: MockExam[];
   adminConfig: AdminConfig;
+  canGenerate: boolean;
+  interviewRecords: InterviewRecord[];
+  interviewSlots: InterviewSlot[];
 }
 
-export const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, reports, mockExams, adminConfig }) => {
+export const InterviewCenter: React.FC<InterviewCenterProps> = ({ 
+  students = [], 
+  reports = [], 
+  mockExams = [], 
+  adminConfig, 
+  canGenerate, 
+  interviewRecords = [], 
+  interviewSlots = [] 
+}) => {
   const [selectedSid, setSelectedSid] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [material, setMaterial] = useState<any>(null);
@@ -23,10 +34,12 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, repo
       const student = students.find(s => s.id === selectedSid)!;
       const studentReports = reports.filter(r => r.studentId === selectedSid).slice(0, 5);
       const studentMocks = mockExams.filter(m => m.studentId === selectedSid);
+      const studentRecords = interviewRecords.filter(r => r.studentId === selectedSid);
       
       const result = await generateInterviewMaterial(
         student.name, student.grade, studentReports, studentMocks, 
-        adminConfig.location, student.targetSchool, student.targetFaculty
+        adminConfig.location, student.targetSchool, student.targetFaculty,
+        studentRecords
       );
       setMaterial(result);
     } catch (e) {
@@ -50,14 +63,14 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, repo
         <div className="flex-1 w-full relative">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-3 block">対象生徒を選択</label>
           <div className="relative group">
-            <select value={selectedSid} onChange={e => setSelectedSid(e.target.value)} className={inputStyle}>
+            <select value={selectedSid} onChange={e => setSelectedSid(e.target.value)} className={inputStyle} disabled={!canGenerate}>
               <option value="">生徒名を選択</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>)}
             </select>
             <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-indigo-600">▼</div>
           </div>
         </div>
-        <button onClick={handleGenerate} disabled={isGenerating || !selectedSid} className="w-full md:w-auto px-12 py-5 bg-indigo-600 text-white rounded-[1.8rem] font-black shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none flex items-center justify-center gap-3">
+        <button onClick={handleGenerate} disabled={isGenerating || !selectedSid || !canGenerate} className="w-full md:w-auto px-12 py-5 bg-indigo-600 text-white rounded-[1.8rem] font-black shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none flex items-center justify-center gap-3">
           {isGenerating ? (
             <>
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -68,6 +81,16 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({ students, repo
           )}
         </button>
       </div>
+
+      {!canGenerate && (
+        <div className="p-6 bg-amber-50 border border-amber-200 rounded-3xl flex items-center gap-4 animate-fadeIn">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-2xl shrink-0">⚠️</div>
+          <div>
+            <p className="font-black text-amber-900">権限がありません</p>
+            <p className="text-xs font-bold text-amber-700">「面談資料作成（高度な分析）」の使用権限が付与されていません。管理者に確認してください。</p>
+          </div>
+        </div>
+      )}
 
       {material ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-slideUp">

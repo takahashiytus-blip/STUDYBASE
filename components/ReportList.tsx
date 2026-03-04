@@ -44,7 +44,7 @@ const ReportList: React.FC<ReportListProps> = ({
       ? reports
       : reports.filter(r => r.studentId === currentUser.id);
 
-    const months = relevantReports.map(r => r.date.substring(0, 7));
+    const months = relevantReports.map(r => (r.date || '').substring(0, 7)).filter(Boolean);
     return Array.from(new Set(months)).sort((a, b) => (b as string).localeCompare(a as string));
   }, [reports, currentUser]);
 
@@ -67,7 +67,7 @@ const ReportList: React.FC<ReportListProps> = ({
       : reports.filter(r => r.studentId === currentUser.id);
     
     if (showFilters) {
-      if (filterMonth) filtered = filtered.filter(r => r.date.startsWith(filterMonth));
+      if (filterMonth) filtered = filtered.filter(r => (r.date || '').startsWith(filterMonth));
       if (filterSubject) filtered = filtered.filter(r => r.subject === filterSubject);
     }
     
@@ -220,7 +220,7 @@ const ReportList: React.FC<ReportListProps> = ({
               </div>
               <p className="text-[11px] text-slate-400 font-black uppercase mb-1">{report.date.replace(/-/g, ' / ')}</p>
               <h3 className="text-2xl font-black text-slate-900 mb-2">{getStudentName(report.studentId)} さん</h3>
-              <p className="text-[14px] text-slate-600 line-clamp-2 italic font-medium">「{report.generatedContent.messageToParents}」</p>
+              <p className="text-[14px] text-slate-600 line-clamp-2 italic font-medium">「{report.generatedContent?.messageToParents || 'メッセージなし'}」</p>
               
               <div className="mt-auto pt-4 flex justify-between items-end">
                 {report.needsAction ? (
@@ -266,12 +266,12 @@ const ReportList: React.FC<ReportListProps> = ({
                 <div className="space-y-6">
                   <div>
                     <span className="text-[10px] font-black text-indigo-400 block mb-1">授業要約</span>
-                    {isEditingContent ? <textarea value={editBuffer.generatedContent.lessonSummary} onChange={(e) => handleUpdateBuffer('lessonSummary', e.target.value, true)} className="w-full text-sm p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold focus:bg-white outline-none" /> : 
-                    <p className="text-slate-800 leading-relaxed font-bold text-[14px] italic">「{selectedReport.generatedContent.lessonSummary}」</p>}
+                    {isEditingContent ? <textarea value={editBuffer.generatedContent?.lessonSummary || ''} onChange={(e) => handleUpdateBuffer('lessonSummary', e.target.value, true)} className="w-full text-sm p-4 bg-slate-50 border border-slate-100 rounded-xl font-bold focus:bg-white outline-none" /> : 
+                    <p className="text-slate-800 leading-relaxed font-bold text-[14px] italic">「{selectedReport.generatedContent?.lessonSummary || '要約なし'}」</p>}
                   </div>
                   <div>
                     <span className="text-[10px] font-black text-indigo-400 block mb-1">生徒の様子</span>
-                    <p className="text-slate-700 leading-relaxed font-bold text-[14px]">{selectedReport.generatedContent.studentPerformance}</p>
+                    <p className="text-slate-700 leading-relaxed font-bold text-[14px]">{selectedReport.generatedContent?.studentPerformance || '記録なし'}</p>
                   </div>
                 </div>
               </section>
@@ -282,7 +282,7 @@ const ReportList: React.FC<ReportListProps> = ({
                    今回の宿題タスク (To-Do)
                  </h4>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                   {selectedReport.generatedContent.homeworkList?.map((task, i) => (
+                   {selectedReport.generatedContent?.homeworkList?.map((task, i) => (
                      <div key={i} className="flex items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-indigo-50 group hover:border-indigo-300 transition-all">
                         <div className="w-5 h-5 rounded-md border-2 border-indigo-100 flex-shrink-0"></div>
                         <span className="text-sm font-bold text-slate-700">{task}</span>
@@ -298,7 +298,7 @@ const ReportList: React.FC<ReportListProps> = ({
                   7日間学習計画 (AI提案)
                 </h4>
                 <div className="relative z-10 space-y-0">
-                  {selectedReport.generatedContent.weeklyPlan?.map((plan, idx) => (
+                  {selectedReport.generatedContent?.weeklyPlan?.map((plan, idx) => (
                     <div key={idx} className="relative pl-10 pb-8 last:pb-2 group">
                       <div className="absolute left-[3px] top-2 bottom-0 w-[2px] bg-slate-100 group-last:hidden"></div>
                       <div className="absolute left-[-4px] top-2 w-4 h-4 rounded-full bg-indigo-500 ring-4 ring-white shadow-md"></div>
@@ -315,12 +315,12 @@ const ReportList: React.FC<ReportListProps> = ({
 
               <section className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h4 className="text-[10px] font-black text-indigo-500 mb-4 uppercase tracking-widest">今後の課題と学習アドバイス</h4>
-                <p className="text-slate-700 text-sm font-bold leading-relaxed whitespace-pre-wrap">{selectedReport.generatedContent.nextSteps}</p>
+                <p className="text-slate-700 text-sm font-bold leading-relaxed whitespace-pre-wrap">{selectedReport.generatedContent?.nextSteps || 'アドバイスなし'}</p>
               </section>
 
               <section className="bg-rose-50 p-6 md:p-10 rounded-[1.5rem] md:rounded-[2.5rem] border border-rose-100 shadow-inner">
                 <h4 className="text-[10px] font-black text-rose-500 mb-4 uppercase tracking-widest">保護者様へのメッセージ</h4>
-                <p className="text-slate-800 text-sm md:text-[15px] font-bold italic leading-relaxed">「{selectedReport.generatedContent.messageToParents}」</p>
+                <p className="text-slate-800 text-sm md:text-[15px] font-bold italic leading-relaxed">「{selectedReport.generatedContent?.messageToParents || 'メッセージなし'}」</p>
               </section>
 
               <section className="bg-white p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-100 shadow-sm">
