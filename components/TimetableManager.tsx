@@ -17,24 +17,13 @@ const DAY_COLORS: Record<number, string> = {
 };
 
 const SUBJECTS = ['数学', '英語', '国語', '理科', '社会', 'その他'];
-const ROOMS = ['Aブース', 'Bブース', 'Cブース', '面談室', '集団教場'];
+const ROOMS = ['A教室', 'B教室', 'C教室', 'D教室', '自習室'];
 
-export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: initialTimetable, students, instructors, onUpdate }) => {
+export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, students, instructors, onUpdate }) => {
   const [isSaving, setIsSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
-  const [localTimetable, setLocalTimetable] = useState<TimetableEntry[]>(initialTimetable);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  // プロップスが更新されたらローカルステートも更新（保存中または編集中以外）
-  React.useEffect(() => {
-    if (!isSaving && !isDirty) {
-      setLocalTimetable(initialTimetable);
-    }
-  }, [initialTimetable, isSaving, isDirty]);
 
   const handleAdd = (day: number) => {
-    setIsDirty(true);
     const newEntry: TimetableEntry = {
       id: generateUniqueId('t'),
       dayOfWeek: day,
@@ -47,26 +36,21 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
       lessonType: 'individual',
       groupName: ''
     };
-    setLocalTimetable([...localTimetable, newEntry]);
+    onUpdate([...timetable, newEntry]);
   };
 
   const handleRemove = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // window.confirmはiframe内で動作が不安定なため、ステートベースの確認に切り替え
-    setConfirmDeleteId(id);
-  };
-
-  const executeRemove = (id: string) => {
-    setIsDirty(true);
+    if (!window.confirm('この授業枠を削除しますか？')) return;
+    
     setDeletedIds(prev => [...prev, id]);
-    setLocalTimetable(prev => prev.filter(t => t.id !== id));
-    setConfirmDeleteId(null);
+    const nextTimetable = timetable.filter(t => t.id !== id);
+    onUpdate(nextTimetable);
   };
 
   const handleEdit = (id: string, updates: Partial<TimetableEntry>) => {
-    setIsDirty(true);
-    setLocalTimetable(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    onUpdate(timetable.map(t => t.id === id ? { ...t, ...updates } : t));
   };
 
   /**
@@ -74,7 +58,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
    */
   const handleSaveAll = async () => {
     // 1. バリデーションチェック
-    const incompleteEntries = localTimetable.filter(t => {
+    const incompleteEntries = timetable.filter(t => {
       const isIndividual = !t.lessonType || t.lessonType === 'individual';
       if (isIndividual) {
         return !t.studentId || !t.instructorId || !t.startTime || !t.endTime || !t.subject;
@@ -91,9 +75,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
 
     setIsSaving(true);
     try {
-      await onUpdate(localTimetable, deletedIds);
+      await onUpdate(timetable, deletedIds);
       setDeletedIds([]);
-      setIsDirty(false);
     } catch (e) {
       console.error("Save Error", e);
     } finally {
@@ -138,7 +121,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
             </div>
             
             <div className="space-y-6 min-h-[650px] bg-slate-100/50 p-4 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-              {localTimetable.filter(t => t.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime)).map(item => (
+              {timetable.filter(t => t.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime)).map(item => (
                 <div key={item.id} className={`bg-white p-6 rounded-[2.2rem] border shadow-md relative group transition-all border-l-8 ${
                   item.lessonType === 'group' ? 'border-l-emerald-500 border-emerald-100' : 'border-l-indigo-500 border-slate-200'
                 }`}>
@@ -151,26 +134,6 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
                    >
                      <span className="text-xl font-black">✕</span>
                    </button>
-
-                   {confirmDeleteId === item.id && (
-                     <div className="absolute inset-0 z-[150] bg-rose-600/95 backdrop-blur-sm rounded-[2.2rem] flex flex-col items-center justify-center p-6 text-white animate-fadeIn">
-                       <p className="font-black text-lg mb-4">この授業枠を削除しますか？</p>
-                       <div className="flex gap-3 w-full">
-                         <button 
-                           onClick={() => setConfirmDeleteId(null)}
-                           className="flex-1 py-3 bg-white/20 rounded-xl font-bold hover:bg-white/30 transition-all"
-                         >
-                           キャンセル
-                         </button>
-                         <button 
-                           onClick={() => executeRemove(item.id)}
-                           className="flex-1 py-3 bg-white text-rose-600 rounded-xl font-black hover:bg-rose-50 transition-all shadow-lg"
-                         >
-                           削除する
-                         </button>
-                       </div>
-                     </div>
-                   )}
 
                    {/* 授業タイプ切り替え */}
                    <div className="flex bg-slate-100 p-1 rounded-xl mb-5">
@@ -248,39 +211,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
                           </select>
                        </div>
                      ) : (
-                       <div className="space-y-4">
-                          <div className="space-y-1.5">
-                             <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">授業名・クラス名</label>
-                             <input 
-                               type="text"
-                               placeholder="例: 中3数学集団"
-                               value={item.groupName || ''}
-                               onChange={e => handleEdit(item.id, { groupName: e.target.value })}
-                               className={selectBaseStyle + (!item.groupName ? " border-rose-200 bg-rose-50" : " border-emerald-100 bg-emerald-50/30")}
-                             />
-                          </div>
-                          <div className="space-y-1.5">
-                             <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">受講生を選択</label>
-                             <div className="max-h-32 overflow-y-auto bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                               {students.map(s => (
-                                 <label key={s.id} className="flex items-center gap-2 cursor-pointer group">
-                                   <input 
-                                     type="checkbox"
-                                     checked={(item.studentIds || []).includes(s.id)}
-                                     onChange={e => {
-                                       const currentIds = item.studentIds || [];
-                                       const nextIds = e.target.checked 
-                                         ? [...currentIds, s.id]
-                                         : currentIds.filter(id => id !== s.id);
-                                       handleEdit(item.id, { studentIds: nextIds });
-                                     }}
-                                     className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                                   />
-                                   <span className="text-[11px] font-bold text-slate-600 group-hover:text-emerald-600 transition-colors">{s.name} ({s.grade})</span>
-                                 </label>
-                               ))}
-                             </div>
-                          </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">授業名・クラス名</label>
+                          <input 
+                            type="text"
+                            placeholder="例: 中3数学集団"
+                            value={item.groupName || ''}
+                            onChange={e => handleEdit(item.id, { groupName: e.target.value })}
+                            className={selectBaseStyle + (!item.groupName ? " border-rose-200 bg-rose-50" : " border-emerald-100 bg-emerald-50/30")}
+                          />
                        </div>
                      )}
 
@@ -298,7 +237,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
                    </div>
                 </div>
               ))}
-              {localTimetable.filter(t => t.dayOfWeek === day).length === 0 && (
+              {timetable.filter(t => t.dayOfWeek === day).length === 0 && (
                 <div className="py-24 text-center opacity-10">
                    <span className="text-6xl">📅</span>
                 </div>

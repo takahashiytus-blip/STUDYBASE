@@ -114,22 +114,10 @@ export interface TimetableEntry {
   endTime: string;
   subject: string;
   studentId?: string;
-  studentIds?: string[]; // 集団授業用: 複数の生徒ID
   instructorId?: string;
   room?: string;
   lessonType?: 'individual' | 'group'; // 個別 or 集団
   groupName?: string; // 集団授業名
-}
-
-export interface GroupLessonLog {
-  id: string;
-  timetableId: string; // どの授業枠か
-  date: string; // 実施日 (YYYY-MM-DD)
-  content: string; // 授業内容
-  testResults: string; // テスト結果
-  homework: string; // 宿題
-  pdfUrl?: string; // PDFファイルのURL (またはbase64)
-  pdfName?: string; // PDFファイル名
 }
 
 export interface AdminConfig {
@@ -140,7 +128,6 @@ export interface AdminConfig {
   wordKingClassroomRecord: number;
   wordKingClassroomHolder: string;
   passwordHash?: string;
-  isMaintenanceMode?: boolean; // メンテナンスモード
 }
 
 export interface InterviewSlot {
