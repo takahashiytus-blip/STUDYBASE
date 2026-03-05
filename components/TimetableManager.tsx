@@ -45,7 +45,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: i
       instructorId: '',
       room: '',
       lessonType: 'individual',
-      groupName: ''
+      groupName: '',
+      studentIds: []
     };
     setLocalTimetable([...localTimetable, newEntry]);
   };
