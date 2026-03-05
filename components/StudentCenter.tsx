@@ -29,9 +29,23 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [attendanceRange, setAttendanceRange] = useState({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
 
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
   const studentReports = useMemo(() => reports.filter(r => r.studentId === selectedStudentId), [reports, selectedStudentId]);
+  
+  const attendanceCount = useMemo(() => {
+    if (!selectedStudentId) return 0;
+    return reports.filter(r => 
+      r.studentId === selectedStudentId && 
+      r.date >= attendanceRange.start && 
+      r.date <= attendanceRange.end
+    ).length;
+  }, [reports, selectedStudentId, attendanceRange]);
+
   const isAdmin = currentUser.role === 'admin';
   const isPrivileged = isAdmin || currentUser.role === 'instructor';
 
@@ -307,6 +321,30 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                           <span className="text-sm font-bold text-slate-400">Score</span>
                         </div>
                         <p className="text-xs text-slate-500 mt-2 font-medium">英単語王ベスト: {selectedStudent.wordKingBest || 0}語</p>
+                        
+                        <div className="mt-6 pt-6 border-t border-slate-200">
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">授業回数集計</p>
+                          <div className="flex items-center gap-2 mb-4">
+                            <input 
+                              type="date" 
+                              value={attendanceRange.start}
+                              onChange={e => setAttendanceRange(prev => ({ ...prev, start: e.target.value }))}
+                              className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-[10px] font-bold outline-none"
+                            />
+                            <span className="text-slate-400">~</span>
+                            <input 
+                              type="date" 
+                              value={attendanceRange.end}
+                              onChange={e => setAttendanceRange(prev => ({ ...prev, end: e.target.value }))}
+                              className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-[10px] font-bold outline-none"
+                            />
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl border border-indigo-100 flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-600">期間内の授業数</span>
+                            <span className="text-2xl font-black text-indigo-600">{attendanceCount} <span className="text-[10px] text-slate-400">回</span></span>
+                          </div>
+                        </div>
+
                         {isPrivileged && (
                           <div className="mt-4 pt-4 border-t border-slate-200 space-y-1">
                             <p className="text-[9px] font-black text-slate-400 uppercase">Account Info</p>

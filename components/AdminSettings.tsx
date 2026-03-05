@@ -15,7 +15,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
     confirmPassword: adminConfig.passwordHash || '',
     location: adminConfig.location,
     wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
-    wordKingClassroomHolder: adminConfig.wordKingClassroomHolder
+    wordKingClassroomHolder: adminConfig.wordKingClassroomHolder,
+    isMaintenanceMode: adminConfig.isMaintenanceMode || false
   });
   const [isSaved, setIsSaved] = useState(false);
 
@@ -27,7 +28,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
       confirmPassword: adminConfig.passwordHash || '',
       location: adminConfig.location,
       wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
-      wordKingClassroomHolder: adminConfig.wordKingClassroomHolder
+      wordKingClassroomHolder: adminConfig.wordKingClassroomHolder,
+      isMaintenanceMode: adminConfig.isMaintenanceMode || false
     });
   }, [adminConfig]);
 
@@ -44,7 +46,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
       passwordHash: formData.password,
       location: formData.location,
       wordKingClassroomRecord: Number(formData.wordKingClassroomRecord),
-      wordKingClassroomHolder: formData.wordKingClassroomHolder
+      wordKingClassroomHolder: formData.wordKingClassroomHolder,
+      isMaintenanceMode: formData.isMaintenanceMode
     });
     
     setIsSaved(true);
@@ -159,6 +162,24 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
                   className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold transition-all"
                 />
               </div>
+            </div>
+
+            <div className="p-6 bg-red-50 rounded-2xl border border-red-100 space-y-4">
+               <div className="flex items-center justify-between">
+                 <div className="space-y-1">
+                   <label className="block text-xs font-black text-red-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                     <span>🛠️</span> メンテナンスモード
+                   </label>
+                   <p className="text-[10px] font-bold text-red-400 ml-1">有効にすると、管理者以外のログインが制限されます</p>
+                 </div>
+                 <button
+                   type="button"
+                   onClick={() => setFormData({ ...formData, isMaintenanceMode: !formData.isMaintenanceMode })}
+                   className={`w-14 h-8 rounded-full transition-all relative ${formData.isMaintenanceMode ? 'bg-red-600' : 'bg-slate-200'}`}
+                 >
+                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${formData.isMaintenanceMode ? 'left-7' : 'left-1'}`} />
+                 </button>
+               </div>
             </div>
 
             <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-4">

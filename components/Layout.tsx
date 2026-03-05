@@ -35,6 +35,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         { id: 'interview-management', label: '面談予約・記録', icon: '📅' },
         { id: 'interview', label: '面談資料AI', icon: '🤝' },
         { id: 'mock', label: '模試成績', icon: '🏆' },
+        { id: 'group-lessons', label: '集団授業管理', icon: '🏫' },
         { id: 'messages', label: 'リクエスト', icon: '💬', badge: reportsWithAction },
         { id: 'students', label: '生徒管理', icon: '👥' },
         { id: 'account', label: 'アカウント設定', icon: '👤' },
@@ -42,6 +43,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
       ]
     : [
         { id: 'dashboard', label: 'Study Base', icon: '📈' },
+        { id: 'group-lessons', label: '集団授業ログ', icon: '🏫' },
         ...(role !== 'parent' ? [
           { id: 'word-king', label: '英単語王', icon: '👑' },
           { id: 'iq-test', label: '知能診断', icon: '🧠' },

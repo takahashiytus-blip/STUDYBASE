@@ -102,10 +102,11 @@ export const WordKing: React.FC<WordKingProps> = ({
       }, 100);
     } else {
       setFeedback('wrong');
+      // 模範解答を表示するために少し長めに待機
       setTimeout(() => {
         setFeedback(null);
         endGame();
-      }, 300);
+      }, 1500);
     }
   };
 
@@ -201,10 +202,16 @@ export const WordKing: React.FC<WordKingProps> = ({
         </div>
 
         {feedback && (
-          <div className={`absolute inset-0 z-20 flex items-center justify-center backdrop-blur-md transition-all ${feedback === 'correct' ? 'bg-emerald-500/20' : 'bg-rose-500/40'}`}>
+          <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-md transition-all ${feedback === 'correct' ? 'bg-emerald-500/20' : 'bg-rose-500/40'}`}>
             <span className="text-[15rem] drop-shadow-2xl animate-scaleIn">
               {feedback === 'correct' ? '⭕' : '❌'}
             </span>
+            {feedback === 'wrong' && currentQ && (
+              <div className="mt-4 bg-white px-8 py-4 rounded-2xl shadow-2xl animate-slideUp">
+                <p className="text-slate-400 font-bold text-sm mb-1 uppercase tracking-widest text-center">Correct Answer</p>
+                <p className="text-4xl font-black text-slate-900 text-center">{currentQ.answer}</p>
+              </div>
+            )}
           </div>
         )}
       </div>

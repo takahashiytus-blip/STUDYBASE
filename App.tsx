@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult, InterviewSlot, InterviewRecord } from './types';
+import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult, InterviewSlot, InterviewRecord, GroupLessonLog } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { generateUniqueId, getLocalISOString, parseSafeDate } from './utils';
@@ -12,6 +12,7 @@ import { StudentCenter } from './components/StudentCenter';
 import { SalaryCenter } from './components/SalaryCenter';
 import { InterviewCenter } from './components/InterviewCenter';
 import { MockExamCenter } from './components/MockExamCenter';
+import { GroupLessonCenter } from './components/GroupLessonCenter';
 import { WordKing } from './components/WordKing';
 import { IQTest } from './components/IQTest';
 import { TimetableManager } from './components/TimetableManager';
@@ -59,6 +60,7 @@ const App: React.FC = () => {
   const [adminConfig, setAdminConfig] = useState<AdminConfig>(DEFAULT_ADMIN);
   const [interviewSlots, setInterviewSlots] = useState<InterviewSlot[]>([]);
   const [interviewRecords, setInterviewRecords] = useState<InterviewRecord[]>([]);
+  const [groupLessonLogs, setGroupLessonLogs] = useState<GroupLessonLog[]>([]);
 
   // セッション復元
   useEffect(() => {
@@ -86,8 +88,9 @@ const App: React.FC = () => {
       localStorage.setItem('study_base_admin_config', JSON.stringify(adminConfig));
       localStorage.setItem('sb_data_interview_slots', JSON.stringify(interviewSlots));
       localStorage.setItem('sb_data_interview_records', JSON.stringify(interviewRecords));
+      localStorage.setItem('sb_data_group_lesson_logs', JSON.stringify(groupLessonLogs));
     }
-  }, [students, instructors, reports, mockExams, allSessions, timetable, adminConfig, interviewSlots, interviewRecords]);
+  }, [students, instructors, reports, mockExams, allSessions, timetable, adminConfig, interviewSlots, interviewRecords, groupLessonLogs]);
 
   const isUpdatingRef = useRef<boolean>(false);
   const isFetchingRef = useRef<boolean>(false);
@@ -113,6 +116,7 @@ const App: React.FC = () => {
         const localInstructors = localStorage.getItem('sb_data_instructors');
         const localSlots = localStorage.getItem('sb_data_interview_slots');
         const localRecords = localStorage.getItem('sb_data_interview_records');
+        const localGroupLogs = localStorage.getItem('sb_data_group_lesson_logs');
         const savedAdmin = localStorage.getItem('study_base_admin_config');
 
         setReports(localReports ? JSON.parse(localReports) : MOCK_REPORTS);
@@ -120,6 +124,7 @@ const App: React.FC = () => {
         setInstructors(localInstructors ? JSON.parse(localInstructors) : MOCK_INSTRUCTORS);
         setInterviewSlots(localSlots ? JSON.parse(localSlots) : []);
         setInterviewRecords(localRecords ? JSON.parse(localRecords) : []);
+        setGroupLessonLogs(localGroupLogs ? JSON.parse(localGroupLogs) : []);
         setTimetable(MOCK_TIMETABLE);
         if (savedAdmin) setAdminConfig(JSON.parse(savedAdmin));
         setIsLoading(false);
@@ -138,7 +143,8 @@ const App: React.FC = () => {
         { data: timetableData, error: timetableError },
         { data: sessionData, error: sessionError },
         { data: slotsData, error: slotsError },
-        { data: recordsData, error: recordsError }
+        { data: recordsData, error: recordsError },
+        { data: groupLogData, error: groupLogError }
       ] = await Promise.all([
         supabase.from('admin_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('students').select('*'),
@@ -148,17 +154,19 @@ const App: React.FC = () => {
         supabase.from('timetable').select('*'),
         supabase.from('study_sessions').select('*').order('date', { ascending: false }),
         supabase.from('interview_slots').select('*'),
-        supabase.from('interview_records').select('*')
+        supabase.from('interview_records').select('*'),
+        supabase.from('group_lesson_logs').select('*')
       ]);
 
       // PGRST205 (Table not found) は無視して空配列として扱う
       const filteredSlotsError = slotsError?.code === 'PGRST205' ? null : slotsError;
       const filteredRecordsError = recordsError?.code === 'PGRST205' ? null : recordsError;
+      const filteredGroupLogError = groupLogError?.code === 'PGRST205' ? null : groupLogError;
 
-      if (adminError || studentError || instructorError || reportError || mockError || timetableError || sessionError || filteredSlotsError || filteredRecordsError) {
+      if (adminError || studentError || instructorError || reportError || mockError || timetableError || sessionError || filteredSlotsError || filteredRecordsError || filteredGroupLogError) {
         console.error("[Sync] Error fetching data:", { 
           adminError, studentError, instructorError, reportError, mockError, timetableError, sessionError, 
-          slotsError: filteredSlotsError, recordsError: filteredRecordsError 
+          slotsError: filteredSlotsError, recordsError: filteredRecordsError, groupLogError: filteredGroupLogError
         });
       } else {
         console.log(`[Sync] Successfully fetched: ${instructorData?.length} instructors, ${studentData?.length} students`);
@@ -299,6 +307,14 @@ const App: React.FC = () => {
         })));
       }
 
+      if (groupLogData) {
+        setGroupLessonLogs(groupLogData.map((g: any) => ({
+          id: String(g.id), timetableId: String(g.timetable_id ?? g.timetableId), date: g.date,
+          content: g.content, testResults: g.test_results ?? g.testResults, 
+          homework: g.homework, pdfUrl: g.pdf_url ?? g.pdfUrl, pdfName: g.pdf_name ?? g.pdfName
+        })));
+      }
+
     } catch (err) {
       console.warn("Sync overlap prevented or error occurred:", err);
     } finally {
@@ -354,6 +370,8 @@ const App: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    const isMaintenance = adminConfig.isMaintenanceMode;
+
     if (loginRole === 'admin') {
       if (loginId === adminConfig.loginId && password === adminConfig.passwordHash) {
         const user = { role: 'admin' as UserRole, id: 'admin', name: adminConfig.name };
@@ -365,6 +383,10 @@ const App: React.FC = () => {
       }
       alert('管理者ログイン情報が正しくありません。');
     } else if (loginRole === 'instructor') {
+      if (isMaintenance) {
+        alert('現在メンテナンス中のため、管理者以外はログインできません。');
+        return;
+      }
       const ins = instructors.find(i => i.loginId === loginId && i.password === password);
       if (ins) {
         const user = { role: 'instructor' as UserRole, id: ins.id, name: ins.name };
@@ -376,6 +398,10 @@ const App: React.FC = () => {
       }
       alert('講師ログイン情報が正しくありません。');
     } else {
+      if (isMaintenance) {
+        alert('現在メンテナンス中のため、管理者以外はログインできません。');
+        return;
+      }
       const std = students.find(s => s.loginId === loginId && s.password === password);
       if (std) {
         const user = { role: loginRole as UserRole, id: std.id, name: std.name };
@@ -411,7 +437,8 @@ const App: React.FC = () => {
           password_hash: latestConfig.passwordHash,
           location: latestConfig.location, 
           word_king_record: latestConfig.wordKingClassroomRecord,
-          word_king_holder: latestConfig.wordKingClassroomHolder
+          word_king_holder: latestConfig.wordKingClassroomHolder,
+          is_maintenance_mode: latestConfig.isMaintenanceMode
         }, { onConflict: 'id' });
       }
       showToast('システム設定を更新しました');
@@ -627,7 +654,10 @@ const App: React.FC = () => {
         }
         const upsertData = newTimetable.map(t => ({
           id: t.id, day_of_week: t.dayOfWeek, start_time: t.startTime, end_time: t.endTime,
-          subject: t.subject, student_id: t.studentId || null, instructor_id: t.instructorId, room: t.room,
+          subject: t.subject, 
+          student_id: t.studentId || null, 
+          student_ids: t.studentIds || [],
+          instructor_id: t.instructorId, room: t.room,
           lesson_type: t.lessonType || 'individual', group_name: t.groupName || ''
         }));
         if (upsertData.length > 0) {
@@ -637,6 +667,26 @@ const App: React.FC = () => {
       showToast('時間割を保存しました');
     } catch (e) {
       showToast('保存中にエラーが発生しました', 'error');
+    } finally { endUpdate(); }
+  };
+
+  const handleUpdateGroupLessonLogs = async (newLogs: GroupLessonLog[], deletedIds?: string[]) => {
+    startUpdate();
+    try {
+      setGroupLessonLogs(newLogs);
+      if (isSupabaseConfigured && supabase) {
+        if (deletedIds && deletedIds.length > 0) {
+          await supabase.from('group_lesson_logs').delete().in('id', deletedIds);
+        }
+        const upsertData = newLogs.map(l => ({
+          id: l.id, timetable_id: l.timetableId, date: l.date,
+          content: l.content, test_results: l.testResults, homework: l.homework,
+          pdf_url: l.pdfUrl, pdf_name: l.pdfName
+        }));
+        if (upsertData.length > 0) {
+          await supabase.from('group_lesson_logs').upsert(upsertData, { onConflict: 'id' });
+        }
+      }
     } finally { endUpdate(); }
   };
 
@@ -859,6 +909,13 @@ const App: React.FC = () => {
         }} onUpdateInstructor={handleUpdateInstructor} onAddInstructor={handleAddInstructor} onDeleteInstructor={handleDeleteInstructor} />;
       case 'salary': return <SalaryCenter instructors={instructors} reports={reports} />;
       case 'mock': return <MockExamCenter students={students} mockExams={mockExams} role={currentUser.role} currentUserId={currentUser.id} onSave={handleAddMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />;
+      case 'group-lessons': return <GroupLessonCenter 
+          currentUser={currentUser} 
+          timetable={timetable} 
+          logs={groupLessonLogs} 
+          students={students}
+          onUpdateLogs={handleUpdateGroupLessonLogs} 
+        />;
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={handleUpdateTimetable} />;
       case 'account': return <AccountSettings currentUser={currentUser} students={students} instructors={instructors} adminConfig={adminConfig} onUpdateStudent={handleUpdateStudent} onUpdateInstructor={handleUpdateInstructor} onUpdateAdminConfig={handleUpdateAdminConfig} />;
