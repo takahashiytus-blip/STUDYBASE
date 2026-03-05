@@ -189,6 +189,12 @@ const App: React.FC = () => {
       validInstructorIds.add('admin');
       const validStudentIds = new Set((studentData || []).map((s: any) => String(s.id)));
 
+      // 最終チェック: フェッチ中に更新が発生していた場合は、取得データを破棄して整合性を守る
+      if (lastUpdateRef.current >= fetchStartTime || isUpdatingRef.current) {
+        console.log("[Sync] Stale fetch detected, discarding results to prevent data reversion.");
+        return;
+      }
+
       if (instructorData) {
         setInstructors(instructorData.map((i: any) => ({ 
           id: String(i.id), name: i.name, specialty: i.specialty, 
@@ -199,9 +205,9 @@ const App: React.FC = () => {
       }
       
       if (studentData) {
-        setStudents(studentData.map((s: any) => {
-          const rawIds = s.instructor_ids ?? s.instructorIds ?? [];
-          const cleanInstructorIds = rawIds.map(String).filter((id: string) => validInstructorIds.has(id));
+        const mappedStudents = studentData.map((s: any) => {
+          const rawIds = safeParse(s.instructor_ids ?? s.instructorIds) || [];
+          const cleanInstructorIds = (Array.isArray(rawIds) ? rawIds : []).map(String).filter((id: string) => validInstructorIds.has(id));
           return {
             id: String(s.id), name: s.name, grade: s.grade, 
             loginId: s.login_id ?? s.loginId, 
@@ -218,7 +224,8 @@ const App: React.FC = () => {
             parentName: s.parent_name ?? s.parentName,
             targets: s.targets ?? undefined
           };
-        }));
+        });
+        setStudents(mappedStudents);
       }
 
       if (adminData) {
@@ -269,32 +276,21 @@ const App: React.FC = () => {
       }
 
       if (timetableData) {
-        setTimetable(timetableData
-          .filter((t: any) => {
-            const lessonType = t.lesson_type ?? t.lessonType ?? 'individual';
-            const sid = t.student_id ?? t.studentId;
-            const iid = t.instructor_id ?? t.instructorId ? String(t.instructor_id ?? t.instructorId) : null;
-            
-            // 個別指導の場合は生徒IDが必須、集団授業の場合は生徒IDがなくてもOK
-            const isStudentValid = lessonType === 'group' || (sid && validStudentIds.has(String(sid)));
-            const isInstructorValid = iid ? validInstructorIds.has(iid) : true;
-            
-            return isStudentValid && isInstructorValid;
-          })
+        const mappedTimetable = timetableData
           .map((t: any) => ({ 
             id: String(t.id), 
-            dayOfWeek: t.day_of_week ?? t.dayOfWeek, 
+            dayOfWeek: Number(t.day_of_week ?? t.dayOfWeek), 
             startTime: t.start_time ?? t.startTime, 
             endTime: t.end_time ?? t.endTime, 
             subject: t.subject, 
             studentId: (t.student_id ?? t.studentId) ? String(t.student_id ?? t.studentId) : '', 
-            studentIds: t.student_ids ?? t.studentIds ?? [],
+            studentIds: safeParse(t.student_ids ?? t.studentIds) || [],
             instructorId: t.instructor_id ?? t.instructorId ? String(t.instructor_id ?? t.instructorId) : undefined, 
             room: t.room,
             lessonType: t.lesson_type ?? t.lessonType ?? 'individual',
             groupName: t.group_name ?? t.groupName ?? ''
-          }))
-        );
+          }));
+        setTimetable(mappedTimetable);
       }
 
       if (sessionData) {
@@ -339,12 +335,6 @@ const App: React.FC = () => {
           content: g.content, testResults: g.test_results ?? g.testResults, 
           homework: g.homework, pdfUrl: g.pdf_url ?? g.pdfUrl, pdfName: g.pdf_name ?? g.pdfName
         })));
-      }
-
-      // 最終チェック: フェッチ中に更新が発生していた場合は、取得データを破棄して整合性を守る
-      if (lastUpdateRef.current >= fetchStartTime || isUpdatingRef.current) {
-        console.log("[Sync] Stale fetch detected, discarding results to prevent data reversion.");
-        return;
       }
 
     } catch (err) {
