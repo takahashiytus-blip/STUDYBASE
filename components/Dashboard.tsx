@@ -295,7 +295,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (isAdmin) return [...safeTimetable].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
     if (role === 'instructor') return safeTimetable.filter(t => t.instructorId === currentUserId).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
     const sid = currentUserStudent?.id || currentUserId;
-    return safeTimetable.filter(t => t.studentId === sid || (t.studentIds && t.studentIds.includes(sid))).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
+    return safeTimetable.filter(t => t.studentId === sid).sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime));
   }, [timetable, currentUserId, isAdmin, role, currentUserStudent]);
 
   const currentSubjectList = isHS ? HS_SUBJECTS : JHS_SUBJECTS;

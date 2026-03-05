@@ -193,14 +193,12 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                 <div className="flex items-center gap-3 ml-auto">
                   {isEditing ? (
                     <div className="flex gap-2">
-                      {selectedInstructorId !== 'admin' && (
-                        <button 
-                          onClick={handleDelete}
-                          className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-rose-100 hover:bg-rose-600 hover:text-white transition-colors flex items-center gap-2"
-                        >
-                          🗑 講師を削除
-                        </button>
-                      )}
+                      <button 
+                        onClick={handleDelete}
+                        className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-rose-100 hover:bg-rose-600 hover:text-white transition-colors flex items-center gap-2"
+                      >
+                        🗑 講師を削除
+                      </button>
                       <button 
                         onClick={() => setIsEditing(false)}
                         className="bg-white text-slate-500 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
@@ -216,14 +214,12 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                     </div>
                   ) : (
                     <>
-                      {selectedInstructorId !== 'admin' && (
-                        <button 
-                          onClick={handleStartEdit}
-                          className="bg-white text-indigo-600 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors"
-                        >
-                          ✎ 情報を編集
-                        </button>
-                      )}
+                      <button 
+                        onClick={handleStartEdit}
+                        className="bg-white text-indigo-600 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors"
+                      >
+                        ✎ 情報を編集
+                      </button>
                       <div className="bg-white px-5 py-2 rounded-2xl shadow-sm border border-indigo-100">
                         <p className="text-[10px] font-black text-indigo-400 uppercase text-center">担当数</p>
                         <p className="text-2xl font-black text-indigo-600 text-center">{assignedStudents.length}</p>

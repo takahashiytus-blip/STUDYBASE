@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult, InterviewSlot, InterviewRecord, GroupLessonLog } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
 import { supabase, isSupabaseConfigured } from './services/supabase';
@@ -62,17 +62,6 @@ const App: React.FC = () => {
   const [interviewRecords, setInterviewRecords] = useState<InterviewRecord[]>([]);
   const [groupLessonLogs, setGroupLessonLogs] = useState<GroupLessonLog[]>([]);
 
-  // 管理者を含めた全講師リスト（選択用）
-  const allInstructors = useMemo(() => {
-    const adminAsInstructor: Instructor = {
-      id: 'admin',
-      name: adminConfig.name,
-      specialty: '統括・管理',
-      canGenerateInterviewMaterial: true
-    };
-    return [adminAsInstructor, ...instructors];
-  }, [instructors, adminConfig.name]);
-
   // セッション復元
   useEffect(() => {
     const savedUser = localStorage.getItem('study_base_session');
@@ -107,7 +96,6 @@ const App: React.FC = () => {
   const isFetchingRef = useRef<boolean>(false);
   const updateTimeoutRef = useRef<number | null>(null);
   const syncPendingRef = useRef<boolean>(false);
-  const lastUpdateRef = useRef<number>(0);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -115,7 +103,6 @@ const App: React.FC = () => {
   };
 
   const fetchAllData = useCallback(async (isSilent = false) => {
-    const fetchStartTime = Date.now();
     if (isFetchingRef.current || isUpdatingRef.current) {
       syncPendingRef.current = true;
       return;
@@ -186,14 +173,7 @@ const App: React.FC = () => {
       }
 
       const validInstructorIds = new Set((instructorData || []).map((i: any) => String(i.id)));
-      validInstructorIds.add('admin');
       const validStudentIds = new Set((studentData || []).map((s: any) => String(s.id)));
-
-      // 最終チェック: フェッチ中に更新が発生していた場合は、取得データを破棄して整合性を守る
-      if (lastUpdateRef.current >= fetchStartTime || isUpdatingRef.current) {
-        console.log("[Sync] Stale fetch detected, discarding results to prevent data reversion.");
-        return;
-      }
 
       if (instructorData) {
         setInstructors(instructorData.map((i: any) => ({ 
@@ -205,9 +185,9 @@ const App: React.FC = () => {
       }
       
       if (studentData) {
-        const mappedStudents = studentData.map((s: any) => {
-          const rawIds = safeParse(s.instructor_ids ?? s.instructorIds) || [];
-          const cleanInstructorIds = (Array.isArray(rawIds) ? rawIds : []).map(String).filter((id: string) => validInstructorIds.has(id));
+        setStudents(studentData.map((s: any) => {
+          const rawIds = s.instructor_ids ?? s.instructorIds ?? [];
+          const cleanInstructorIds = rawIds.map(String).filter((id: string) => validInstructorIds.has(id));
           return {
             id: String(s.id), name: s.name, grade: s.grade, 
             loginId: s.login_id ?? s.loginId, 
@@ -224,8 +204,7 @@ const App: React.FC = () => {
             parentName: s.parent_name ?? s.parentName,
             targets: s.targets ?? undefined
           };
-        });
-        setStudents(mappedStudents);
+        }));
       }
 
       if (adminData) {
@@ -276,21 +255,20 @@ const App: React.FC = () => {
       }
 
       if (timetableData) {
-        const mappedTimetable = timetableData
+        setTimetable(timetableData
+          .filter((t: any) => {
+            const sid = String(t.student_id ?? t.studentId);
+            const iid = t.instructor_id ?? t.instructorId ? String(t.instructor_id ?? t.instructorId) : null;
+            return validStudentIds.has(sid) && (iid ? validInstructorIds.has(iid) : true);
+          })
           .map((t: any) => ({ 
-            id: String(t.id), 
-            dayOfWeek: Number(t.day_of_week ?? t.dayOfWeek), 
-            startTime: t.start_time ?? t.startTime, 
-            endTime: t.end_time ?? t.endTime, 
-            subject: t.subject, 
-            studentId: (t.student_id ?? t.studentId) ? String(t.student_id ?? t.studentId) : '', 
-            studentIds: safeParse(t.student_ids ?? t.studentIds) || [],
-            instructorId: t.instructor_id ?? t.instructorId ? String(t.instructor_id ?? t.instructorId) : undefined, 
-            room: t.room,
+            id: String(t.id), dayOfWeek: t.day_of_week ?? t.dayOfWeek, startTime: t.start_time ?? t.startTime, 
+            endTime: t.end_time ?? t.endTime, subject: t.subject, studentId: String(t.student_id ?? t.studentId), 
+            instructorId: t.instructor_id ?? t.instructorId ? String(t.instructor_id ?? t.instructorId) : undefined, room: t.room,
             lessonType: t.lesson_type ?? t.lessonType ?? 'individual',
             groupName: t.group_name ?? t.groupName ?? ''
-          }));
-        setTimetable(mappedTimetable);
+          }))
+        );
       }
 
       if (sessionData) {
@@ -376,19 +354,17 @@ const App: React.FC = () => {
 
   const startUpdate = () => {
     isUpdatingRef.current = true;
-    lastUpdateRef.current = Date.now();
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
     updateTimeoutRef.current = window.setTimeout(() => { isUpdatingRef.current = false; }, 8000);
   };
 
   const endUpdate = () => {
-    lastUpdateRef.current = Date.now();
     isUpdatingRef.current = false;
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current);
     // If a sync was requested during update, trigger it now
     if (syncPendingRef.current) {
       syncPendingRef.current = false;
-      setTimeout(() => fetchAllData(true), 1000);
+      fetchAllData(true);
     }
   };
 
@@ -518,39 +494,17 @@ const App: React.FC = () => {
       setStudents(prev => prev.filter(s => s.id !== id));
       setReports(prev => prev.filter(r => r.studentId !== id));
       setAllSessions(prev => prev.filter(s => s.studentId !== id));
-      
-      // 時間割の更新: 単一ID一致、または集団授業の配列に含まれる場合を除外/更新
-      setTimetable(prev => prev
-        .filter(t => t.studentId !== id)
-        .map(t => ({
-          ...t,
-          studentIds: (t.studentIds || []).filter(sid => sid !== id)
-        }))
-      );
-      
+      setTimetable(prev => prev.filter(t => t.studentId !== id));
       setMockExams(prev => prev.filter(m => m.studentId !== id));
 
       if (isSupabaseConfigured && supabase) {
-        // 集団授業の受講生リストから削除
-        const { data: groupLessons } = await supabase.from('timetable').select('id, student_ids').eq('lesson_type', 'group');
-        let timetableUpdates: any[] = [];
-        if (groupLessons) {
-          timetableUpdates = groupLessons
-            .filter(t => (t.student_ids || []).includes(id))
-            .map(t => {
-              const newIds = t.student_ids.filter((sid: string) => sid !== id);
-              return supabase!.from('timetable').update({ student_ids: newIds }).eq('id', t.id);
-            });
-        }
-
         await Promise.all([
           supabase.from('students').delete().eq('id', id),
           supabase.from('report_drafts').delete().eq('student_id', id),
           supabase.from('study_sessions').delete().eq('student_id', id),
           supabase.from('reports').delete().eq('student_id', id),
           supabase.from('timetable').delete().eq('student_id', id),
-          supabase.from('mock_exams').delete().eq('student_id', id),
-          ...timetableUpdates
+          supabase.from('mock_exams').delete().eq('student_id', id)
         ]);
       }
       showToast('生徒データを削除しました');
@@ -912,7 +866,7 @@ const App: React.FC = () => {
       case 'dashboard': return <Dashboard 
           reports={reports} 
           students={students} 
-          instructors={allInstructors} 
+          instructors={instructors} 
           role={currentUser.role} 
           mockExams={mockExams} 
           currentUserStudent={activeStudent} 
@@ -942,9 +896,9 @@ const App: React.FC = () => {
           interviewSlots={interviewSlots}
         />;
       case 'interview-management':
-        return <InterviewManagement slots={interviewSlots} records={interviewRecords} students={students} instructors={allInstructors} currentUser={currentUser} onUpdateSlots={handleUpdateInterviewSlots} onUpdateRecords={handleUpdateInterviewRecords} />;
-      case 'students': return <StudentCenter students={students} reports={reports} allSessions={allSessions} instructors={allInstructors} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
-      case 'instructors': return <InstructorCenter instructors={allInstructors} students={students} onAssignStudent={async (sid, iid) => {
+        return <InterviewManagement slots={interviewSlots} records={interviewRecords} students={students} instructors={instructors} currentUser={currentUser} onUpdateSlots={handleUpdateInterviewSlots} onUpdateRecords={handleUpdateInterviewRecords} />;
+      case 'students': return <StudentCenter students={students} reports={reports} allSessions={allSessions} instructors={instructors} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
+      case 'instructors': return <InstructorCenter instructors={instructors} students={students} onAssignStudent={async (sid, iid) => {
           const s = students.find(std => std.id === sid);
           await handleUpdateStudent(sid, { instructorIds: Array.from(new Set([...(s?.instructorIds || []), iid])) });
           showToast('担当生徒を追加しました');
@@ -953,7 +907,7 @@ const App: React.FC = () => {
           await handleUpdateStudent(sid, { instructorIds: (s?.instructorIds || []).filter(id => id !== iid) });
           showToast('担当生徒を解除しました');
         }} onUpdateInstructor={handleUpdateInstructor} onAddInstructor={handleAddInstructor} onDeleteInstructor={handleDeleteInstructor} />;
-      case 'salary': return <SalaryCenter instructors={allInstructors} reports={reports} />;
+      case 'salary': return <SalaryCenter instructors={instructors} reports={reports} />;
       case 'mock': return <MockExamCenter students={students} mockExams={mockExams} role={currentUser.role} currentUserId={currentUser.id} onSave={handleAddMockExam} onUpdate={handleUpdateMockExam} onDelete={handleDeleteMockExam} />;
       case 'group-lessons': return <GroupLessonCenter 
           currentUser={currentUser} 
@@ -963,8 +917,8 @@ const App: React.FC = () => {
           onUpdateLogs={handleUpdateGroupLessonLogs} 
         />;
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
-      case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={allInstructors} onUpdate={handleUpdateTimetable} />;
-      case 'account': return <AccountSettings currentUser={currentUser} students={students} instructors={allInstructors} adminConfig={adminConfig} onUpdateStudent={handleUpdateStudent} onUpdateInstructor={handleUpdateInstructor} onUpdateAdminConfig={handleUpdateAdminConfig} />;
+      case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={instructors} onUpdate={handleUpdateTimetable} />;
+      case 'account': return <AccountSettings currentUser={currentUser} students={students} instructors={instructors} adminConfig={adminConfig} onUpdateStudent={handleUpdateStudent} onUpdateInstructor={handleUpdateInstructor} onUpdateAdminConfig={handleUpdateAdminConfig} />;
       case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} />;
       default: return <div className="p-10 text-center text-slate-400 font-bold italic">Module not found.</div>;
     }
