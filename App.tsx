@@ -32,7 +32,11 @@ const DEFAULT_ADMIN: AdminConfig = {
   passwordHash: 'password123',
   location: '埼玉県さいたま市',
   wordKingClassroomRecord: 124,
-  wordKingClassroomHolder: '初代王'
+  wordKingClassroomHolder: '初代王',
+  isMaintenanceMode: false,
+  announcement: '',
+  announcementTargetIds: [],
+  isAnnouncementActive: false
 };
 
 const safeParse = (val: any) => {
@@ -321,7 +325,11 @@ const App: React.FC = () => {
           passwordHash: adminData.password_hash ?? adminData.passwordHash ?? DEFAULT_ADMIN.passwordHash,
           location: adminData.location, 
           wordKingClassroomRecord: adminData.word_king_record ?? adminData.wordKingClassroomRecord ?? 0,
-          wordKingClassroomHolder: adminData.word_king_holder ?? adminData.wordKingClassroomHolder ?? '---'
+          wordKingClassroomHolder: adminData.word_king_holder ?? adminData.wordKingClassroomHolder ?? '---',
+          isMaintenanceMode: adminData.is_maintenance_mode ?? adminData.isMaintenanceMode ?? false,
+          announcement: adminData.announcement ?? '',
+          announcementTargetIds: safeParse(adminData.announcement_target_ids ?? adminData.announcementTargetIds) || [],
+          isAnnouncementActive: adminData.is_announcement_active ?? adminData.isAnnouncementActive ?? false
         });
       }
 
@@ -542,7 +550,10 @@ const App: React.FC = () => {
           location: latestConfig.location, 
           word_king_record: latestConfig.wordKingClassroomRecord,
           word_king_holder: latestConfig.wordKingClassroomHolder,
-          is_maintenance_mode: latestConfig.isMaintenanceMode
+          is_maintenance_mode: latestConfig.isMaintenanceMode,
+          announcement: latestConfig.announcement,
+          announcement_target_ids: latestConfig.announcementTargetIds,
+          is_announcement_active: latestConfig.isAnnouncementActive
         }, { onConflict: 'id' });
         if (error) throw error;
       }
@@ -1135,6 +1146,7 @@ const App: React.FC = () => {
           onUpdateStudent={handleUpdateStudent}
           interviewSlots={interviewSlots}
           interviewRecords={interviewRecords}
+          adminConfig={adminConfig}
         />;
       case 'create': return <ReportForm students={students} currentUser={currentUser} onSave={handleSaveReport} />;
       case 'reports': return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
@@ -1183,7 +1195,7 @@ const App: React.FC = () => {
         />;
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={allInstructors} onUpdate={handleUpdateTimetable} />;
-      case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} onSync={() => fetchAllData(false)} />;
+      case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} onSync={() => fetchAllData(false)} students={students} instructors={instructors} />;
       default: return <div className="p-10 text-center text-slate-400 font-bold italic">Module not found.</div>;
     }
   };

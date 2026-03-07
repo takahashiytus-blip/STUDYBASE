@@ -128,18 +128,30 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   };
 
   const handleGenerate = async () => {
+    console.log("[ReportForm] handleGenerate triggered");
     if (!selectedStudentId || !subject || !rawNotes) {
-      alert('生徒名、科目、指導メモを入力してください。');
+      setErrorMessage('生徒名、科目、指導メモを入力してください。');
       return;
     }
     setIsGenerating(true);
     setErrorMessage(null);
     try {
       const student = students.find(s => s.id === selectedStudentId);
+      console.log("[ReportForm] Calling generateProfessionalReport for:", student?.name);
       const content = await generateProfessionalReport(student?.name || '生徒', subject, rawNotes, homeworkAssigned || '特になし', attendanceStatus, Number(quizScore) || undefined, homeworkCompletion);
+      console.log("[ReportForm] Generation success:", content);
       setGeneratedPreview(content);
     } catch (error: any) {
-      setErrorMessage(error.message || "AI生成中にエラーが発生しました。");
+      console.error("[ReportForm] Generation error:", error);
+      let msg = "AI生成中にエラーが発生しました。";
+      if (error.message?.includes("API Key")) {
+        msg = "Gemini APIキーが設定されていません。管理者に確認してください。";
+      } else if (error.message?.includes("429")) {
+        msg = "リクエストが多すぎます。少し時間を置いてから再試行してください。";
+      } else {
+        msg = error.message || msg;
+      }
+      setErrorMessage(msg);
     } finally {
       setIsGenerating(false);
     }
@@ -288,6 +300,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
           <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-5 rounded-2xl font-black text-white transition-all shadow-xl active:scale-95 ${isGenerating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
             {isGenerating ? "AI生成中..." : "✨ AIによる学習計画生成"}
           </button>
+          
+          {errorMessage && (
+            <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-bold animate-shake">
+              ⚠️ {errorMessage}
+            </div>
+          )}
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col min-h-[600px]">
@@ -331,6 +349,27 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
                   className="w-full bg-transparent text-sm font-bold leading-relaxed text-slate-700 border-none focus:ring-0 resize-none"
                   rows={2}
                 />
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">宿題リスト</h4>
+                <div className="space-y-1">
+                  {generatedPreview.homeworkList.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-indigo-500">•</span>
+                      <input 
+                        type="text"
+                        value={item}
+                        onChange={(e) => {
+                          const newList = [...generatedPreview.homeworkList];
+                          newList[idx] = e.target.value;
+                          setGeneratedPreview({ ...generatedPreview, homeworkList: newList });
+                        }}
+                        className="w-full bg-transparent text-sm font-bold text-slate-700 border-none focus:ring-0 p-0"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div>

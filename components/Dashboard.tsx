@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend } from 'recharts';
-import { Report, Student, UserRole, StudySession, MockExam, TimetableEntry, Instructor, InterviewSlot, InterviewRecord } from '../types';
+import { generateStudyAdvice } from '../services/geminiService';
+import { Report, Student, UserRole, StudySession, MockExam, TimetableEntry, Instructor, InterviewSlot, InterviewRecord, AdminConfig } from '../types';
 import { parseSafeDate, getLocalISOString } from '../utils';
 import { SUBJECT_CONFIG, JHS_SUBJECTS, HS_SUBJECTS } from '../constants';
 
@@ -20,6 +21,7 @@ interface DashboardProps {
   onUpdateStudent?: (id: string, updates: Partial<Student>) => void;
   interviewSlots: InterviewSlot[];
   interviewRecords: InterviewRecord[];
+  adminConfig: AdminConfig;
 }
 
 const calculateRemainingDays = (targetDateStr: string) => {
@@ -49,15 +51,44 @@ const Dashboard: React.FC<DashboardProps> = ({
   onUpdateTimetable,
   onUpdateStudent,
   interviewSlots = [],
-  interviewRecords = []
+  interviewRecords = [],
+  adminConfig
 }) => {
   const isPrivileged = role === 'instructor' || role === 'admin';
   const isAdmin = role === 'admin';
   const isStudent = role === 'student';
 
+  const showAnnouncement = adminConfig.isAnnouncementActive && adminConfig.announcement && 
+    (adminConfig.announcementTargetIds || []).includes(currentUserId);
+
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [timerMode, setTimerMode] = useState<'up' | 'down'>('up');
+  const [advisorMessage, setAdvisorMessage] = useState<string>('「目標に向かって、一歩ずつ進んでいきましょう。継続は力なり！」');
+  const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
+
+  useEffect(() => {
+    const fetchAdvice = async () => {
+      if (role === 'student' && currentUserStudent) {
+        setIsGeneratingAdvice(true);
+        try {
+          const studentReports = reports.filter(r => r.studentId === currentUserId);
+          const advice = await generateStudyAdvice(
+            currentUserStudent.name,
+            currentUserStudent.grade,
+            studentReports
+          );
+          setAdvisorMessage(`「${advice}」`);
+        } catch (error) {
+          console.error('Failed to generate study advice:', error);
+        } finally {
+          setIsGeneratingAdvice(false);
+        }
+      }
+    };
+
+    fetchAdvice();
+  }, [role, currentUserId, currentUserStudent, reports]);
   const [customMins, setCustomMins] = useState('25');
   const timerRef = useRef<number | null>(null);
 
@@ -308,6 +339,16 @@ const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-[11px] md:text-sm text-slate-500 font-medium italic">{isAdmin ? '校舎全体の稼働状況を一括管理' : '継続は、やがて自信に変わる。'}</p>
         </div>
       </header>
+
+      {showAnnouncement && (
+        <div className="bg-amber-50 border-2 border-amber-200 p-6 rounded-[2rem] shadow-sm animate-fadeIn flex items-center gap-4">
+          <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-2xl shadow-inner flex-shrink-0">📢</div>
+          <div className="flex-1">
+            <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">《お知らせ》</h4>
+            <p className="text-sm font-bold text-slate-800 leading-relaxed whitespace-pre-wrap">{adminConfig.announcement}</p>
+          </div>
+        </div>
+      )}
 
       <div className={`grid grid-cols-1 ${role === 'parent' ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-5 md:gap-6`}>
         {!isPrivileged ? (
@@ -595,7 +636,15 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
             )}
             {currentUserStudent?.weeklyInstructorMessage && (<div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-200 shadow-md"><h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👨‍🏫</span> 講師からの言葉</h4><p className="text-sm font-bold text-slate-800 leading-relaxed italic">「{currentUserStudent.weeklyInstructorMessage}」</p></div>)}
-            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-lg"><h4 className="text-[10px] font-black text-indigo-100 uppercase mb-4">Study Advisor</h4><p className="text-[15px] font-bold leading-relaxed italic text-white drop-shadow-sm">「目標に向かって、一歩ずつ進んでいきましょう。継続は力なり！」</p></div>
+            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-lg">
+              <h4 className="text-[10px] font-black text-indigo-100 uppercase mb-4 flex justify-between items-center">
+                <span>Study Advisor</span>
+                {isGeneratingAdvice && <span className="animate-pulse text-[8px]">AI生成中...</span>}
+              </h4>
+              <p className="text-[15px] font-bold leading-relaxed italic text-white drop-shadow-sm">
+                {advisorMessage}
+              </p>
+            </div>
           </div>
         </div>
       )}

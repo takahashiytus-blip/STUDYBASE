@@ -141,6 +141,9 @@ export interface AdminConfig {
   wordKingClassroomHolder: string;
   passwordHash?: string;
   isMaintenanceMode?: boolean; // メンテナンスモード
+  announcement?: string; // お知らせメッセージ
+  announcementTargetIds?: string[]; // お知らせを表示する生徒・講師のID
+  isAnnouncementActive?: boolean; // お知らせの有効化フラグ
 }
 
 export interface InterviewSlot {

@@ -43,6 +43,7 @@ export const generateProfessionalReport = async (
 ) => {
   return withRetry(async () => {
     const ai = getAI();
+    console.log("[Gemini] Generating report for:", studentName);
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `プロの塾講師として保護者向けの報告書をJSON形式で生成してください。
@@ -79,7 +80,19 @@ export const generateProfessionalReport = async (
         }
       }
     });
-    return JSON.parse(response.text || "{}");
+    console.log("[Gemini] Response received:", response.text);
+    const parsed = JSON.parse(response.text || "{}");
+    
+    // 必須フィールドの欠落を補完
+    return {
+      lessonSummary: parsed.lessonSummary || "",
+      studentPerformance: parsed.studentPerformance || "",
+      homeworkStatus: parsed.homeworkStatus || "",
+      homeworkList: parsed.homeworkList || [],
+      nextSteps: parsed.nextSteps || "",
+      weeklyPlan: parsed.weeklyPlan || [],
+      messageToParents: parsed.messageToParents || ""
+    };
   });
 };
 
@@ -204,5 +217,28 @@ export const validateDisplayName = async (name: string): Promise<{ isValid: bool
       }
     });
     return JSON.parse(response.text || '{"isValid":true}');
+  });
+};
+
+export const generateStudyAdvice = async (
+  studentName: string,
+  grade: string,
+  recentReports: any[]
+): Promise<string> => {
+  return withRetry(async () => {
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `生徒「${studentName}」への学習アドバイスを100文字以内で生成してください。
+      学年: ${grade}
+      最近の指導報告: ${JSON.stringify(recentReports.slice(0, 3))}
+      
+      【要件】
+      1. 親しみやすく、かつプロフェッショナルな「スタディアドバイザー」としての口調。
+      2. 具体的な励ましや、学習のヒントを含める。
+      3. 100文字以内の短いメッセージ。
+      4. 「」は含めないでください。`,
+    });
+    return response.text || "目標に向かって、一歩ずつ進んでいきましょう。継続は力なり！";
   });
 };

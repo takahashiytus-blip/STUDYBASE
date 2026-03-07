@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { AdminConfig } from '../types';
+import { AdminConfig, Student, Instructor } from '../types';
 
 interface AdminSettingsProps {
   adminConfig: AdminConfig;
   onUpdate: (updates: Partial<AdminConfig>) => void;
   onSync: () => void;
+  students: Student[];
+  instructors: Instructor[];
 }
 
-const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, onSync }) => {
+const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, onSync, students, instructors }) => {
   const [formData, setFormData] = useState({
     name: adminConfig.name,
     loginId: adminConfig.loginId,
@@ -17,22 +19,33 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
     location: adminConfig.location,
     wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
     wordKingClassroomHolder: adminConfig.wordKingClassroomHolder,
-    isMaintenanceMode: adminConfig.isMaintenanceMode || false
+    isMaintenanceMode: adminConfig.isMaintenanceMode || false,
+    announcement: adminConfig.announcement || '',
+    announcementTargetIds: adminConfig.announcementTargetIds || [],
+    isAnnouncementActive: adminConfig.isAnnouncementActive || false
   });
   const [isSaved, setIsSaved] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isUserInteracting, setIsUserInteracting] = useState(false);
 
+  // 外部からの更新（同期など）を反映させるが、ユーザーが入力中の場合は邪魔しない
   useEffect(() => {
-    setFormData({
-      name: adminConfig.name,
-      loginId: adminConfig.loginId,
-      password: adminConfig.passwordHash || '',
-      confirmPassword: adminConfig.passwordHash || '',
-      location: adminConfig.location,
-      wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
-      wordKingClassroomHolder: adminConfig.wordKingClassroomHolder,
-      isMaintenanceMode: adminConfig.isMaintenanceMode || false
-    });
-  }, [adminConfig]);
+    if (!isUserInteracting) {
+      setFormData({
+        name: adminConfig.name,
+        loginId: adminConfig.loginId,
+        password: adminConfig.passwordHash || '',
+        confirmPassword: adminConfig.passwordHash || '',
+        location: adminConfig.location,
+        wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
+        wordKingClassroomHolder: adminConfig.wordKingClassroomHolder,
+        isMaintenanceMode: adminConfig.isMaintenanceMode || false,
+        announcement: adminConfig.announcement || '',
+        announcementTargetIds: adminConfig.announcementTargetIds || [],
+        isAnnouncementActive: adminConfig.isAnnouncementActive || false
+      });
+    }
+  }, [adminConfig, isUserInteracting]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,12 +61,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
       location: formData.location,
       wordKingClassroomRecord: Number(formData.wordKingClassroomRecord),
       wordKingClassroomHolder: formData.wordKingClassroomHolder,
-      isMaintenanceMode: formData.isMaintenanceMode
+      isMaintenanceMode: formData.isMaintenanceMode,
+      announcement: formData.announcement,
+      announcementTargetIds: formData.announcementTargetIds,
+      isAnnouncementActive: formData.isAnnouncementActive
     });
     
     setIsSaved(true);
+    setIsUserInteracting(false);
     setTimeout(() => setIsSaved(false), 3000);
   };
+
+  const toggleTarget = (id: string) => {
+    setIsUserInteracting(true);
+    setFormData(prev => {
+      const ids = prev.announcementTargetIds.includes(id)
+        ? prev.announcementTargetIds.filter(i => i !== id)
+        : [...prev.announcementTargetIds, id];
+      return { ...prev, announcementTargetIds: ids };
+    });
+  };
+
+  const filteredUsers = [...students, ...instructors].filter(u => 
+    u.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-8 animate-fadeIn max-w-2xl pb-20">
@@ -61,6 +92,95 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
         <h2 className="text-3xl font-black text-slate-800">システム設定</h2>
         <p className="text-slate-500 font-medium">教室全体の情報と管理者アカウントを管理します</p>
       </header>
+
+      {/* お知らせ設定 */}
+      <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+        <div className="bg-indigo-600 p-8 text-white flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg">📢</div>
+            <div>
+              <h3 className="text-xl font-bold">お知らせ配信</h3>
+              <p className="text-indigo-100 text-sm">ダッシュボード上部にメッセージを表示します</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsUserInteracting(true);
+              setFormData({ ...formData, isAnnouncementActive: !formData.isAnnouncementActive });
+            }}
+            className={`w-14 h-8 rounded-full transition-all relative ${formData.isAnnouncementActive ? 'bg-emerald-400' : 'bg-white/20'}`}
+          >
+            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${formData.isAnnouncementActive ? 'left-7' : 'left-1'}`} />
+          </button>
+        </div>
+        <div className={`p-8 md:p-10 space-y-6 transition-all ${!formData.isAnnouncementActive ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
+          <div className="space-y-2">
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">メッセージ内容</label>
+            <textarea 
+              placeholder="例: 《お知らせ》3月8日9:00~12:00 でアプリのメンテナンスを実施いたします"
+              value={formData.announcement}
+              onFocus={() => setIsUserInteracting(true)}
+              onChange={(e) => setFormData({ ...formData, announcement: e.target.value })}
+              className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold transition-all min-h-[100px]"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">配信対象の選択</label>
+              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                {formData.announcementTargetIds.length} 名選択中
+              </span>
+            </div>
+            
+            <input 
+              type="text"
+              placeholder="名前で検索..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-indigo-500"
+            />
+
+            <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-2xl p-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (formData.announcementTargetIds.length === [...students, ...instructors].length) {
+                    setFormData({ ...formData, announcementTargetIds: [] });
+                  } else {
+                    setFormData({ ...formData, announcementTargetIds: [...students, ...instructors].map(u => u.id) });
+                  }
+                }}
+                className="w-full text-left px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center justify-between"
+              >
+                <span>全選択 / 解除</span>
+                <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${formData.announcementTargetIds.length === [...students, ...instructors].length ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                  {formData.announcementTargetIds.length === [...students, ...instructors].length && <span className="text-white text-[10px]">✓</span>}
+                </div>
+              </button>
+              {filteredUsers.map(user => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => toggleTarget(user.id)}
+                  className="w-full text-left px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`px-1.5 py-0.5 rounded-md text-[8px] ${'grade' in user ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                      {'grade' in user ? '生徒' : '講師'}
+                    </span>
+                    <span>{user.name}</span>
+                  </div>
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${formData.announcementTargetIds.includes(user.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                    {formData.announcementTargetIds.includes(user.id) && <span className="text-white text-[10px]">✓</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
         <div className="bg-indigo-950 p-8 text-white flex items-center gap-6">
