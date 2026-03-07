@@ -27,12 +27,18 @@ export const SalaryCenter: React.FC<SalaryCenterProps> = ({ instructors, reports
       // 指定された年月に関連する報告書を抽出
       // 標準月(1-12)入力の場合はその月に、講習区分入力の場合は実施日ベースでフィルタ
       const monthlyReports = reports.filter(r => {
-        const isTargetInstructor = r.instructorName === ins.name;
+        // 講師名の照合（空白を除去して比較）
+        const cleanReportName = (r.instructorName || '').replace(/\s+/g, '');
+        const cleanInstructorName = (ins.name || '').replace(/\s+/g, '');
+        const isTargetInstructor = cleanReportName === cleanInstructorName;
+        
         const reportDate = parseSafeDate(r.date);
         const matchesDate = reportDate.getMonth() + 1 === selectedMonth && reportDate.getFullYear() === selectedYear;
         
-        // sessionMonthが数字のみの場合は一致を、文字列の場合は日付ベースで判定に含める
-        const matchesPeriod = r.sessionMonth.toString() === selectedMonth.toString();
+        // 実施年と実施月の両方が一致するかチェック
+        const rYear = r.sessionYear?.toString();
+        const rMonth = r.sessionMonth?.toString();
+        const matchesPeriod = rYear === selectedYear.toString() && rMonth === selectedMonth.toString();
         
         return isTargetInstructor && (matchesDate || matchesPeriod);
       });

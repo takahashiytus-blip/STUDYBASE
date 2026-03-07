@@ -34,6 +34,8 @@ const ReportList: React.FC<ReportListProps> = ({
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [editBuffer, setEditBuffer] = useState<Report | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
   const [filterMonth, setFilterMonth] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
@@ -121,9 +123,8 @@ const ReportList: React.FC<ReportListProps> = ({
 
   const handleDeleteMessage = (messageId: string) => {
     if (!selectedReport) return;
-    if (window.confirm('このメッセージを削除しますか？')) {
-      onDeleteMessage(selectedReport.id, messageId);
-    }
+    onDeleteMessage(selectedReport.id, messageId);
+    setDeletingMessageId(null);
   };
 
   const getAttendanceBadge = (status?: AttendanceStatus) => {
@@ -237,21 +238,41 @@ const ReportList: React.FC<ReportListProps> = ({
                     <span className="text-[9px] font-black bg-rose-500 text-white px-3 py-1 rounded-full animate-pulse">未返信あり</span>
                   ) : <div />}
                   {isPrivileged && (
-                    <button 
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        console.log('[ReportList] Delete card clicked for', report.id);
-                        if (onDeleteReport) {
-                          onDeleteReport(report.id); 
-                        } else {
-                          console.error('[ReportList] onDeleteReport prop is missing!');
-                          alert('削除機能が正しく設定されていません。管理者にお問い合わせください。');
-                        }
-                      }}
-                      className="text-[10px] font-black text-rose-500 hover:text-rose-700 transition-colors"
-                    >
-                      🗑️ 削除
-                    </button>
+                    <div className="relative">
+                      {deletingReportId !== report.id ? (
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setDeletingReportId(report.id);
+                          }}
+                          className="text-[10px] font-black text-rose-500 hover:text-rose-700 transition-colors"
+                        >
+                          🗑️ 削除
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1 bg-rose-600 p-1 rounded-lg shadow-xl animate-scaleIn" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onDeleteReport) onDeleteReport(report.id);
+                              setDeletingReportId(null);
+                            }}
+                            className="bg-white text-rose-600 px-2 py-1 rounded text-[9px] font-black hover:bg-rose-50 transition-colors"
+                          >
+                            削除
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingReportId(null);
+                            }}
+                            className="bg-rose-700 text-white px-2 py-1 rounded text-[9px] font-black hover:bg-rose-800 transition-colors"
+                          >
+                            止める
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
@@ -284,21 +305,37 @@ const ReportList: React.FC<ReportListProps> = ({
                 {isPrivileged && !isEditingContent && (
                   <>
                     <button onClick={() => setIsEditingContent(true)} className="bg-white/10 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black hover:bg-white/20 transition-all border border-white/10 shadow-sm">✎ 編集</button>
-                    <button 
-                      onClick={() => { 
-                        console.log('[ReportList] Delete modal clicked for', selectedReport.id);
-                        if (onDeleteReport) {
-                          onDeleteReport(selectedReport.id); 
-                          setSelectedReportId(null); 
-                        } else {
-                          console.error('[ReportList] onDeleteReport prop is missing in modal!');
-                          alert('削除機能が正しく設定されていません。');
-                        }
-                      }} 
-                      className="bg-rose-500/20 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black hover:bg-rose-500 transition-all border border-rose-500/30 shadow-sm text-rose-100"
-                    >
-                      🗑️ 削除
-                    </button>
+                    <div className="relative">
+                      {deletingReportId !== selectedReport.id ? (
+                        <button 
+                          onClick={() => setDeletingReportId(selectedReport.id)} 
+                          className="bg-rose-500/20 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black hover:bg-rose-500 transition-all border border-rose-500/30 shadow-sm text-rose-100"
+                        >
+                          🗑️ 削除
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1 bg-rose-600 p-1 rounded-xl shadow-xl animate-scaleIn">
+                          <button 
+                            onClick={() => {
+                              if (onDeleteReport) {
+                                onDeleteReport(selectedReport.id); 
+                                setSelectedReportId(null); 
+                                setDeletingReportId(null);
+                              }
+                            }}
+                            className="bg-white text-rose-600 px-3 py-1.5 rounded-lg text-xs font-black hover:bg-rose-50 transition-colors"
+                          >
+                            削除
+                          </button>
+                          <button 
+                            onClick={() => setDeletingReportId(null)}
+                            className="bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-black hover:bg-rose-800 transition-colors"
+                          >
+                            止める
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
                 {isEditingContent && <button onClick={saveReportEdits} className="bg-white text-amber-700 px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black shadow-lg hover:bg-amber-50 transition-all">💾 保存</button>}
@@ -477,7 +514,31 @@ const ReportList: React.FC<ReportListProps> = ({
                         <div className={`group relative max-w-[85%] p-4 rounded-2xl text-sm font-bold shadow-sm ${msg.senderId === currentUser.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-800'}`}>
                           {msg.text}
                           {msg.senderId === currentUser.id && (
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }} className="absolute -left-8 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity border border-rose-100 hover:bg-rose-500 hover:text-white">✕</button>
+                            <div className="absolute -left-20 top-1/2 -translate-y-1/2 flex items-center">
+                              {deletingMessageId !== msg.id ? (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setDeletingMessageId(msg.id); }} 
+                                  className="w-6 h-6 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity border border-rose-100 hover:bg-rose-500 hover:text-white"
+                                >
+                                  ✕
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-1 bg-rose-600 p-1 rounded-lg shadow-xl animate-scaleIn">
+                                  <button 
+                                    onClick={() => handleDeleteMessage(msg.id)}
+                                    className="bg-white text-rose-600 px-1.5 py-0.5 rounded text-[8px] font-black"
+                                  >
+                                    消す
+                                  </button>
+                                  <button 
+                                    onClick={() => setDeletingMessageId(null)}
+                                    className="bg-rose-700 text-white px-1.5 py-0.5 rounded text-[8px] font-black"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                         <span className="text-[9px] text-slate-400 mt-1.5 font-bold tracking-tight">{msg.senderName} • {msg.timestamp}</span>

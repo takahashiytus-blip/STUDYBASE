@@ -226,14 +226,26 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">出席状況</label>
-              <div className="flex gap-1.5">
-                {['present', 'late', 'absent'].map(id => (
-                  <button key={id} type="button" onClick={() => handleInteraction('attendanceStatus', id as AttendanceStatus, setAttendanceStatus)} className={`flex-1 py-2.5 rounded-xl font-black text-[11px] transition-all border-2 ${attendanceStatus === id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}>
-                    {id === 'present' ? '出席' : id === 'late' ? '遅刻' : '欠席'}
-                  </button>
-                ))}
+            <div className="grid grid-cols-1 md:col-span-2 gap-4">
+              <div className="flex-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">出席状況</label>
+                <div className="flex gap-1.5">
+                  {['present', 'late', 'absent'].map(id => (
+                    <button key={id} type="button" onClick={() => handleInteraction('attendanceStatus', id as AttendanceStatus, setAttendanceStatus)} className={`flex-1 py-2.5 rounded-xl font-black text-[11px] transition-all border-2 ${attendanceStatus === id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}>
+                      {id === 'present' ? '出席' : id === 'late' ? '遅刻' : '欠席'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">宿題実施率</label>
+                <div className="flex gap-1.5">
+                  {[100, 80, 50, 0].map(val => (
+                    <button key={val} type="button" onClick={() => handleInteraction('homeworkCompletion', val, setHomeworkCompletion)} className={`flex-1 py-2.5 rounded-xl font-black text-[11px] transition-all border-2 ${homeworkCompletion === val ? 'bg-emerald-600 text-white border-emerald-600 shadow-md' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'}`}>
+                      {val}%
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div>

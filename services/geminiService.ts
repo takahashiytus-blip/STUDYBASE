@@ -123,7 +123,7 @@ export const generateInterviewMaterial = async (
   return withRetry(async () => {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `生徒「${studentName}」の面談資料を生成。
       学年: ${grade}, 志望校: ${targetSchool || "未定"}, 志望学部: ${targetFaculty || "未定"}, 地域: ${location}
       過去の指導報告: ${JSON.stringify(reports)}

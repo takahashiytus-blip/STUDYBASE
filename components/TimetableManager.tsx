@@ -17,13 +17,24 @@ const DAY_COLORS: Record<number, string> = {
 };
 
 const SUBJECTS = ['数学', '英語', '国語', '理科', '社会', 'その他'];
-const ROOMS = ['A教室', 'B教室', 'C教室', 'D教室', '自習室'];
+const ROOMS = ['Aブース', 'Bブース', 'Cブース', '面談室', '集団教場'];
 
-export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, students, instructors, onUpdate }) => {
+export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable: initialTimetable, students, instructors, onUpdate }) => {
   const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [localTimetable, setLocalTimetable] = useState<TimetableEntry[]>(initialTimetable);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // プロップスが更新されたらローカルステートも更新（保存中または編集中以外）
+  React.useEffect(() => {
+    if (!isSaving && !isDirty) {
+      setLocalTimetable(initialTimetable);
+    }
+  }, [initialTimetable, isSaving, isDirty]);
 
   const handleAdd = (day: number) => {
+    setIsDirty(true);
     const newEntry: TimetableEntry = {
       id: generateUniqueId('t'),
       dayOfWeek: day,
@@ -34,23 +45,38 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
       instructorId: '',
       room: '',
       lessonType: 'individual',
-      groupName: ''
+      groupName: '',
+      studentIds: []
     };
-    onUpdate([...timetable, newEntry]);
+    setLocalTimetable([...localTimetable, newEntry]);
   };
 
   const handleRemove = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!window.confirm('この授業枠を削除しますか？')) return;
-    
-    setDeletedIds(prev => [...prev, id]);
-    const nextTimetable = timetable.filter(t => t.id !== id);
-    onUpdate(nextTimetable);
+    // window.confirmはiframe内で動作が不安定なため、ステートベースの確認に切り替え
+    setConfirmDeleteId(id);
+  };
+
+  const executeRemove = async (id: string) => {
+    setIsSaving(true);
+    try {
+      const nextTimetable = localTimetable.filter(t => t.id !== id);
+      // 削除は即座にデータベースに反映させる（ユーザーの期待に合わせる）
+      await onUpdate(nextTimetable, [id]);
+      setLocalTimetable(nextTimetable);
+      setConfirmDeleteId(null);
+      setIsDirty(false);
+    } catch (e) {
+      console.error("[TimetableManager] Remove Error:", e);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEdit = (id: string, updates: Partial<TimetableEntry>) => {
-    onUpdate(timetable.map(t => t.id === id ? { ...t, ...updates } : t));
+    setIsDirty(true);
+    setLocalTimetable(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   };
 
   /**
@@ -58,7 +84,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
    */
   const handleSaveAll = async () => {
     // 1. バリデーションチェック
-    const incompleteEntries = timetable.filter(t => {
+    const incompleteEntries = localTimetable.filter(t => {
       const isIndividual = !t.lessonType || t.lessonType === 'individual';
       if (isIndividual) {
         return !t.studentId || !t.instructorId || !t.startTime || !t.endTime || !t.subject;
@@ -75,10 +101,35 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
 
     setIsSaving(true);
     try {
-      await onUpdate(timetable, deletedIds);
+      await onUpdate(localTimetable, deletedIds);
       setDeletedIds([]);
+      setIsDirty(false);
     } catch (e) {
       console.error("Save Error", e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const handleClearAll = async () => {
+    const allIds = localTimetable.map(t => t.id);
+    if (allIds.length === 0) {
+      setShowClearConfirm(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // 全削除は即座にデータベースに反映させる
+      await onUpdate([], allIds);
+      setLocalTimetable([]);
+      setDeletedIds([]);
+      setIsDirty(false);
+      setShowClearConfirm(false);
+    } catch (e) {
+      console.error("[TimetableManager] Clear All Error:", e);
     } finally {
       setIsSaving(false);
     }
@@ -94,16 +145,46 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">時間割管理</h2>
           <p className="text-slate-500 font-medium">編集内容は右下の「変更を確定して保存」で反映されます。</p>
         </div>
-        <button 
-          onClick={handleSaveAll}
-          disabled={isSaving}
-          className={`fixed bottom-8 right-8 z-[200] px-10 py-5 rounded-[2rem] font-black text-white shadow-2xl transition-all active:scale-95 flex items-center gap-3 ${isSaving ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-        >
-          {isSaving ? (
-            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-          ) : '💾'}
-          変更を確定して保存
-        </button>
+        <div className="flex gap-3">
+          {localTimetable.length > 0 && (
+            <div className="relative">
+              {!showClearConfirm ? (
+                <button 
+                  onClick={() => setShowClearConfirm(true)}
+                  className="px-6 py-3 bg-rose-50 text-rose-600 rounded-2xl font-black text-sm hover:bg-rose-600 hover:text-white transition-all shadow-sm border border-rose-100"
+                >
+                  🗑️ 全て削除
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 bg-rose-600 p-1 rounded-2xl shadow-lg animate-scaleIn">
+                  <span className="text-[10px] font-black text-white px-3">本当に削除？</span>
+                  <button 
+                    onClick={handleClearAll}
+                    className="bg-white text-rose-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-rose-50 transition-colors"
+                  >
+                    はい
+                  </button>
+                  <button 
+                    onClick={() => setShowClearConfirm(false)}
+                    className="bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-black hover:bg-rose-800 transition-colors"
+                  >
+                    いいえ
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          <button 
+            onClick={handleSaveAll}
+            disabled={isSaving}
+            className={`fixed bottom-8 right-8 z-[200] px-10 py-5 rounded-[2rem] font-black text-white shadow-2xl transition-all active:scale-95 flex items-center gap-3 ${isSaving ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+          >
+            {isSaving ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            ) : '💾'}
+            変更を確定して保存
+          </button>
+        </div>
       </header>
 
       <div className="flex overflow-x-auto pb-8 gap-5 snap-x custom-scrollbar -mx-4 px-4">
@@ -121,7 +202,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
             </div>
             
             <div className="space-y-6 min-h-[650px] bg-slate-100/50 p-4 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-              {timetable.filter(t => t.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime)).map(item => (
+              {localTimetable.filter(t => t.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime)).map(item => (
                 <div key={item.id} className={`bg-white p-6 rounded-[2.2rem] border shadow-md relative group transition-all border-l-8 ${
                   item.lessonType === 'group' ? 'border-l-emerald-500 border-emerald-100' : 'border-l-indigo-500 border-slate-200'
                 }`}>
@@ -134,6 +215,26 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                    >
                      <span className="text-xl font-black">✕</span>
                    </button>
+
+                   {confirmDeleteId === item.id && (
+                     <div className="absolute inset-0 z-[150] bg-rose-600/95 backdrop-blur-sm rounded-[2.2rem] flex flex-col items-center justify-center p-6 text-white animate-fadeIn">
+                       <p className="font-black text-lg mb-4">この授業枠を削除しますか？</p>
+                       <div className="flex gap-3 w-full">
+                         <button 
+                           onClick={() => setConfirmDeleteId(null)}
+                           className="flex-1 py-3 bg-white/20 rounded-xl font-bold hover:bg-white/30 transition-all"
+                         >
+                           キャンセル
+                         </button>
+                         <button 
+                           onClick={() => executeRemove(item.id)}
+                           className="flex-1 py-3 bg-white text-rose-600 rounded-xl font-black hover:bg-rose-50 transition-all shadow-lg"
+                         >
+                           削除する
+                         </button>
+                       </div>
+                     </div>
+                   )}
 
                    {/* 授業タイプ切り替え */}
                    <div className="flex bg-slate-100 p-1 rounded-xl mb-5">
@@ -211,15 +312,39 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                           </select>
                        </div>
                      ) : (
-                       <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">授業名・クラス名</label>
-                          <input 
-                            type="text"
-                            placeholder="例: 中3数学集団"
-                            value={item.groupName || ''}
-                            onChange={e => handleEdit(item.id, { groupName: e.target.value })}
-                            className={selectBaseStyle + (!item.groupName ? " border-rose-200 bg-rose-50" : " border-emerald-100 bg-emerald-50/30")}
-                          />
+                       <div className="space-y-4">
+                          <div className="space-y-1.5">
+                             <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">授業名・クラス名</label>
+                             <input 
+                               type="text"
+                               placeholder="例: 中3数学集団"
+                               value={item.groupName || ''}
+                               onChange={e => handleEdit(item.id, { groupName: e.target.value })}
+                               className={selectBaseStyle + (!item.groupName ? " border-rose-200 bg-rose-50" : " border-emerald-100 bg-emerald-50/30")}
+                             />
+                          </div>
+                          <div className="space-y-1.5">
+                             <label className="text-[10px] font-black text-emerald-500 uppercase ml-1">受講生を選択</label>
+                             <div className="max-h-32 overflow-y-auto bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                               {students.map(s => (
+                                 <label key={s.id} className="flex items-center gap-2 cursor-pointer group">
+                                   <input 
+                                     type="checkbox"
+                                     checked={(item.studentIds || []).includes(s.id)}
+                                     onChange={e => {
+                                       const currentIds = item.studentIds || [];
+                                       const nextIds = e.target.checked 
+                                         ? [...currentIds, s.id]
+                                         : currentIds.filter(id => id !== s.id);
+                                       handleEdit(item.id, { studentIds: nextIds });
+                                     }}
+                                     className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                   />
+                                   <span className="text-[11px] font-bold text-slate-600 group-hover:text-emerald-600 transition-colors">{s.name} ({s.grade})</span>
+                                 </label>
+                               ))}
+                             </div>
+                          </div>
                        </div>
                      )}
 
@@ -237,7 +362,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({ timetable, s
                    </div>
                 </div>
               ))}
-              {timetable.filter(t => t.dayOfWeek === day).length === 0 && (
+              {localTimetable.filter(t => t.dayOfWeek === day).length === 0 && (
                 <div className="py-24 text-center opacity-10">
                    <span className="text-6xl">📅</span>
                 </div>

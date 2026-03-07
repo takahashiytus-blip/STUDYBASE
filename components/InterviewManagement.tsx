@@ -71,11 +71,19 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
     alert('面談を予約しました。教室からの確定をお待ちください。');
   };
 
+  const [deletingSlotId, setDeletingSlotId] = useState<string | null>(null);
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+
   const handleConfirmSlot = (slotId: string) => {
     const slot = slots.find(s => s.id === slotId);
     if (!slot) return;
     onUpdateSlots(slots.map(s => s.id === slotId ? { ...slot, status: 'confirmed' } : s));
     alert('面談日程を確定しました。通知を送信しました（シミュレーション）。');
+  };
+
+  const handleDeleteSlot = (id: string) => {
+    onUpdateSlots(slots.filter(s => s.id !== id), [id]);
+    setDeletingSlotId(null);
   };
 
   const handleAddRecord = () => {
@@ -114,8 +122,8 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
   }, [records, currentUser, isAdmin, isInstructor, viewSid]);
 
   const handleDeleteRecord = (id: string) => {
-    if (!confirm('この面談記録を削除してもよろしいですか？')) return;
     onUpdateRecords(records.filter(r => r.id !== id), [id]);
+    setDeletingRecordId(null);
   };
 
   return (
@@ -184,7 +192,35 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
                   <span className="text-xs font-black text-slate-400">{slot.date}</span>
                 </div>
                 
-                <div className="mb-6">
+                <div className="mb-6 relative group/slot">
+                  {(isAdmin || isInstructor) && (
+                    <>
+                      {deletingSlotId !== slot.id ? (
+                        <button 
+                          onClick={() => setDeletingSlotId(slot.id)}
+                          className="absolute -top-2 -right-2 w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center opacity-0 group-hover/slot:opacity-100 transition-all hover:bg-rose-500 hover:text-white z-10"
+                          title="枠を削除"
+                        >
+                          ✕
+                        </button>
+                      ) : (
+                        <div className="absolute -top-2 -right-2 flex items-center gap-1 bg-rose-600 p-1 rounded-lg shadow-xl z-20 animate-scaleIn">
+                          <button 
+                            onClick={() => handleDeleteSlot(slot.id)}
+                            className="bg-white text-rose-600 px-2 py-1 rounded text-[10px] font-black hover:bg-rose-50 transition-colors"
+                          >
+                            削除
+                          </button>
+                          <button 
+                            onClick={() => setDeletingSlotId(null)}
+                            className="bg-rose-700 text-white px-2 py-1 rounded text-[10px] font-black hover:bg-rose-800 transition-colors"
+                          >
+                            止める
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                   <p className="text-2xl font-black text-slate-800">{slot.startTime} <span className="text-sm font-bold text-slate-400">〜</span> {slot.endTime}</p>
                   <p className="text-xs font-bold text-slate-500 mt-1">担当: {slot.interviewerName}</p>
                 </div>
@@ -274,13 +310,32 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
               return (
                 <div key={record.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-md transition-all relative group">
                   {(isAdmin || isInstructor) && (
-                    <button 
-                      onClick={() => handleDeleteRecord(record.id)}
-                      className="absolute top-8 right-8 w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white"
-                      title="削除"
-                    >
-                      🗑️
-                    </button>
+                    <div className="absolute top-8 right-8 z-20">
+                      {deletingRecordId !== record.id ? (
+                        <button 
+                          onClick={() => setDeletingRecordId(record.id)}
+                          className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white"
+                          title="削除"
+                        >
+                          🗑️
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1 bg-rose-600 p-1 rounded-xl shadow-xl animate-scaleIn">
+                          <button 
+                            onClick={() => handleDeleteRecord(record.id)}
+                            className="bg-white text-rose-600 px-3 py-1.5 rounded-lg text-xs font-black hover:bg-rose-50 transition-colors"
+                          >
+                            削除
+                          </button>
+                          <button 
+                            onClick={() => setDeletingRecordId(null)}
+                            className="bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-black hover:bg-rose-800 transition-colors"
+                          >
+                            止める
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                   <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center gap-4">

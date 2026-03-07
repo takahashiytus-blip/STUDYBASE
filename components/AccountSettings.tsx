@@ -10,6 +10,7 @@ interface AccountSettingsProps {
   onUpdateStudent: (id: string, updates: Partial<Student>) => void;
   onUpdateInstructor: (id: string, updates: Partial<Instructor>) => void;
   onUpdateAdminConfig: (updates: Partial<AdminConfig>) => void;
+  onSync: () => void;
 }
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({
@@ -19,7 +20,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   adminConfig,
   onUpdateStudent,
   onUpdateInstructor,
-  onUpdateAdminConfig
+  onUpdateAdminConfig,
+  onSync
 }) => {
   const [formData, setFormData] = useState({
     loginId: '',
@@ -128,6 +130,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
               className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
             >
               <span>💾</span> 変更を保存する
+            </button>
+            <button 
+              type="button"
+              onClick={onSync}
+              className="w-full py-4 bg-slate-100 text-slate-600 rounded-[1.5rem] font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-3"
+            >
+              <span>🔄</span> データを最新に更新（同期）
             </button>
             {isSaved && <p className="text-emerald-600 font-bold text-sm animate-fadeIn">✓ 設定を保存しました</p>}
           </div>

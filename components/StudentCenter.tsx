@@ -26,12 +26,28 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
   students, reports, allSessions, instructors, currentUser, 
   onAddMessage, onDeleteMessage, onMarkResolved, onUpdateReport, onDeleteReport, onAddStudent, onUpdateStudent, onDeleteStudent 
 }) => {
+  console.log("[StudentCenter] Received students count:", students.length);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [attendanceRange, setAttendanceRange] = useState({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
 
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
   const studentReports = useMemo(() => reports.filter(r => r.studentId === selectedStudentId), [reports, selectedStudentId]);
+  
+  const attendanceCount = useMemo(() => {
+    if (!selectedStudentId) return 0;
+    return reports.filter(r => 
+      r.studentId === selectedStudentId && 
+      r.date >= attendanceRange.start && 
+      r.date <= attendanceRange.end
+    ).length;
+  }, [reports, selectedStudentId, attendanceRange]);
+
   const isAdmin = currentUser.role === 'admin';
   const isPrivileged = isAdmin || currentUser.role === 'instructor';
 
@@ -131,12 +147,44 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                   </div>
                   <div className="flex gap-3">
                     {isAdmin && (
-                      <button onClick={() => {
-                        if (window.confirm('この生徒の全データを削除しますか？')) {
-                          onDeleteStudent?.(selectedStudent.id);
-                          setSelectedStudentId(null);
-                        }
-                      }} className="p-3 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all">🗑</button>
+                      <div className="relative">
+                        <button 
+                          onClick={() => setShowDeleteConfirm(selectedStudent.id)}
+                          className="p-3 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white transition-all"
+                          title="削除"
+                        >
+                          🗑
+                        </button>
+                        
+                        {showDeleteConfirm === selectedStudent.id && (
+                          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                            <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-slideUp">
+                              <h4 className="text-xl font-black text-slate-800 mb-2">生徒データの削除</h4>
+                              <p className="text-slate-500 text-sm font-medium mb-6">
+                                {selectedStudent.name} さんの全データを削除しますか？この操作は取り消せません。
+                              </p>
+                              <div className="flex gap-3">
+                                <button 
+                                  onClick={() => setShowDeleteConfirm(null)}
+                                  className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-all"
+                                >
+                                  キャンセル
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    onDeleteStudent?.(selectedStudent.id);
+                                    setShowDeleteConfirm(null);
+                                    setSelectedStudentId(null);
+                                  }}
+                                  className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-black hover:bg-rose-700 transition-all shadow-lg shadow-rose-200"
+                                >
+                                  削除する
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                     <button onClick={() => setIsEditing(!isEditing)} className="px-6 py-3 bg-white text-indigo-600 border border-indigo-100 rounded-2xl font-bold shadow-sm hover:bg-indigo-50 transition-all">
                       {isEditing ? '完了' : '編集'}
@@ -307,6 +355,30 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                           <span className="text-sm font-bold text-slate-400">Score</span>
                         </div>
                         <p className="text-xs text-slate-500 mt-2 font-medium">英単語王ベスト: {selectedStudent.wordKingBest || 0}語</p>
+                        
+                        <div className="mt-6 pt-6 border-t border-slate-200">
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">授業回数集計</p>
+                          <div className="flex items-center gap-2 mb-4">
+                            <input 
+                              type="date" 
+                              value={attendanceRange.start}
+                              onChange={e => setAttendanceRange(prev => ({ ...prev, start: e.target.value }))}
+                              className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-[10px] font-bold outline-none"
+                            />
+                            <span className="text-slate-400">~</span>
+                            <input 
+                              type="date" 
+                              value={attendanceRange.end}
+                              onChange={e => setAttendanceRange(prev => ({ ...prev, end: e.target.value }))}
+                              className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-[10px] font-bold outline-none"
+                            />
+                          </div>
+                          <div className="bg-white p-4 rounded-2xl border border-indigo-100 flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-600">期間内の授業数</span>
+                            <span className="text-2xl font-black text-indigo-600">{attendanceCount} <span className="text-[10px] text-slate-400">回</span></span>
+                          </div>
+                        </div>
+
                         {isPrivileged && (
                           <div className="mt-4 pt-4 border-t border-slate-200 space-y-1">
                             <p className="text-[9px] font-black text-slate-400 uppercase">Account Info</p>

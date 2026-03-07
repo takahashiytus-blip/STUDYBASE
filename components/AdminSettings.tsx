@@ -5,9 +5,10 @@ import { AdminConfig } from '../types';
 interface AdminSettingsProps {
   adminConfig: AdminConfig;
   onUpdate: (updates: Partial<AdminConfig>) => void;
+  onSync: () => void;
 }
 
-const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) => {
+const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, onSync }) => {
   const [formData, setFormData] = useState({
     name: adminConfig.name,
     loginId: adminConfig.loginId,
@@ -15,7 +16,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
     confirmPassword: adminConfig.passwordHash || '',
     location: adminConfig.location,
     wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
-    wordKingClassroomHolder: adminConfig.wordKingClassroomHolder
+    wordKingClassroomHolder: adminConfig.wordKingClassroomHolder,
+    isMaintenanceMode: adminConfig.isMaintenanceMode || false
   });
   const [isSaved, setIsSaved] = useState(false);
 
@@ -27,7 +29,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
       confirmPassword: adminConfig.passwordHash || '',
       location: adminConfig.location,
       wordKingClassroomRecord: adminConfig.wordKingClassroomRecord,
-      wordKingClassroomHolder: adminConfig.wordKingClassroomHolder
+      wordKingClassroomHolder: adminConfig.wordKingClassroomHolder,
+      isMaintenanceMode: adminConfig.isMaintenanceMode || false
     });
   }, [adminConfig]);
 
@@ -44,7 +47,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
       passwordHash: formData.password,
       location: formData.location,
       wordKingClassroomRecord: Number(formData.wordKingClassroomRecord),
-      wordKingClassroomHolder: formData.wordKingClassroomHolder
+      wordKingClassroomHolder: formData.wordKingClassroomHolder,
+      isMaintenanceMode: formData.isMaintenanceMode
     });
     
     setIsSaved(true);
@@ -161,6 +165,24 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
               </div>
             </div>
 
+            <div className="p-6 bg-red-50 rounded-2xl border border-red-100 space-y-4">
+               <div className="flex items-center justify-between">
+                 <div className="space-y-1">
+                   <label className="block text-xs font-black text-red-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                     <span>🛠️</span> メンテナンスモード
+                   </label>
+                   <p className="text-[10px] font-bold text-red-400 ml-1">有効にすると、管理者以外のログインが制限されます</p>
+                 </div>
+                 <button
+                   type="button"
+                   onClick={() => setFormData({ ...formData, isMaintenanceMode: !formData.isMaintenanceMode })}
+                   className={`w-14 h-8 rounded-full transition-all relative ${formData.isMaintenanceMode ? 'bg-red-600' : 'bg-slate-200'}`}
+                 >
+                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${formData.isMaintenanceMode ? 'left-7' : 'left-1'}`} />
+                 </button>
+               </div>
+            </div>
+
             <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-4">
                <label className="block text-xs font-black text-amber-600 uppercase tracking-widest ml-1 flex items-center gap-2">
                  <span>👑</span> 英単語王 教室最高記録
@@ -225,6 +247,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate }) 
               className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
             >
               <span>💾</span> 変更を保存する
+            </button>
+            <button 
+              type="button"
+              onClick={onSync}
+              className="w-full py-4 bg-slate-100 text-slate-600 rounded-[1.5rem] font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-3"
+            >
+              <span>🔄</span> データを最新に更新（同期）
             </button>
             {isSaved && <p className="text-emerald-600 font-bold text-sm animate-fadeIn">✓ 設定を保存しました</p>}
           </div>

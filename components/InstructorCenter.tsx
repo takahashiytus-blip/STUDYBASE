@@ -39,6 +39,8 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
     canGenerateInterviewMaterial: false 
   });
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const selectedInstructor = useMemo(() => instructors.find(i => i.id === selectedInstructorId), [instructors, selectedInstructorId]);
   
   // 重要：同期による削除への追従ロジック
@@ -97,8 +99,13 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
 
   const handleDelete = () => {
     if (!selectedInstructorId || !onDeleteInstructor) return;
-    if (window.confirm(`${editName} 講師の情報を完全に削除しますか？担当生徒の紐付けも解除されます。`)) {
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (selectedInstructorId && onDeleteInstructor) {
       onDeleteInstructor(selectedInstructorId);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -194,12 +201,6 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                   {isEditing ? (
                     <div className="flex gap-2">
                       <button 
-                        onClick={handleDelete}
-                        className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-rose-100 hover:bg-rose-600 hover:text-white transition-colors flex items-center gap-2"
-                      >
-                        🗑 講師を削除
-                      </button>
-                      <button 
                         onClick={() => setIsEditing(false)}
                         className="bg-white text-slate-500 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
                       >
@@ -213,21 +214,57 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <>
-                      <button 
-                        onClick={handleStartEdit}
-                        className="bg-white text-indigo-600 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors"
-                      >
-                        ✎ 情報を編集
-                      </button>
+                    <div className="flex items-center gap-3">
+                      {selectedInstructorId !== 'admin' && (
+                        <button 
+                          onClick={handleDelete}
+                          className="bg-rose-50 text-rose-500 p-3 rounded-2xl hover:bg-rose-500 hover:text-white transition-all shadow-sm border border-rose-100"
+                          title="講師を削除"
+                        >
+                          🗑
+                        </button>
+                      )}
+                      {selectedInstructorId !== 'admin' && (
+                        <button 
+                          onClick={handleStartEdit}
+                          className="bg-white text-indigo-600 px-6 py-3 rounded-2xl text-xs font-bold shadow-sm border border-indigo-100 hover:bg-indigo-50 transition-colors"
+                        >
+                          ✎ 情報を編集
+                        </button>
+                      )}
                       <div className="bg-white px-5 py-2 rounded-2xl shadow-sm border border-indigo-100">
                         <p className="text-[10px] font-black text-indigo-400 uppercase text-center">担当数</p>
                         <p className="text-2xl font-black text-indigo-600 text-center">{assignedStudents.length}</p>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
+
+              {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                  <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-slideUp">
+                    <h4 className="text-xl font-black text-slate-800 mb-2">講師データの削除</h4>
+                    <p className="text-slate-500 text-sm font-medium mb-6">
+                      {selectedInstructor?.name} 講師の情報を完全に削除しますか？担当生徒の紐付けも解除されます。
+                    </p>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-all"
+                      >
+                        キャンセル
+                      </button>
+                      <button 
+                        onClick={confirmDelete}
+                        className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-black hover:bg-rose-700 transition-all shadow-lg shadow-rose-200"
+                      >
+                        削除する
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {isEditing ? (
                 <div className="p-8 md:p-10 bg-slate-50/50">

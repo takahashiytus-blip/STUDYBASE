@@ -22,20 +22,25 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentResult, setCurrentResult] = useState<IQResult | null>(null);
 
-  // 重要：全デバイス共通の厳密な1日1回制限
+  // 重要：全デバイス共通の厳密な1週間1回制限
   useEffect(() => {
     if (step === 'start') {
-      const today = getLocalISOString();
-      // DBから取得した全履歴をスキャンし、今日の日付のデータがあれば制限画面へ
-      const hasAttemptedToday = iqHistory.some(res => res.date === today);
-      if (hasAttemptedToday) {
+      const now = new Date();
+      // DBから取得した全履歴をスキャンし、直近1週間以内のデータがあれば制限画面へ
+      const hasAttemptedRecently = iqHistory.some(res => {
+        const attemptDate = new Date(res.date);
+        const diffTime = Math.abs(now.getTime() - attemptDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays <= 7;
+      });
+      if (hasAttemptedRecently) {
         setStep('limit');
       }
     }
   }, [iqHistory, step]);
 
   const startTest = () => {
-    const shuffled = [...IQ_QUESTION_BANK].sort(() => Math.random() - 0.5).slice(0, 10);
+    const shuffled = [...IQ_QUESTION_BANK].sort(() => Math.random() - 0.5).slice(0, 20);
     setCurrentQuestions(shuffled);
     setAnswers({});
     setCurrentIndex(0);
@@ -84,7 +89,7 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
       breakdown[cat] = Math.round(breakdown[cat] / (counts[cat] || 1));
     });
 
-    const finalScore = Math.min(100, Math.round((totalScore / 150) * 100) + 40);
+    const finalScore = Math.min(100, Math.round((totalScore / 300) * 100) + 40);
 
     try {
       const analysis = await generateIQAnalysis(studentName, grade, finalScore, breakdown) || "分析結果を生成できませんでした。";
@@ -96,8 +101,18 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
         breakdown,
         aiAnalysis: analysis
       };
-      onComplete(finalScore, breakdown, analysis);
+      
+      // 保存処理の前に結果をセット
       setCurrentResult(result);
+      
+      // App.tsxの保存処理を呼び出す
+      try {
+        await onComplete(finalScore, breakdown, analysis);
+      } catch (saveError) {
+        console.error("IQ Result Save Error:", saveError);
+        // 保存に失敗しても結果表示は継続するが、警告を出す
+      }
+      
       setStep('result');
     } catch (error) {
       console.error("IQ Analysis Error:", error);
@@ -110,10 +125,10 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
     return (
       <div className="bg-white rounded-[3rem] p-12 text-center shadow-2xl border-4 border-indigo-100 flex flex-col items-center justify-center min-h-[400px] animate-fadeIn">
         <div className="text-7xl mb-6">⏳</div>
-        <h2 className="text-3xl font-black text-slate-800 mb-4">本日の診断は完了しています</h2>
+        <h2 className="text-3xl font-black text-slate-800 mb-4">次回の診断までお待ちください</h2>
         <p className="text-slate-500 font-bold mb-8 leading-relaxed">
-          全デバイス共通で「1日1回」限定です。最新の結果は履歴一覧から確認できます。<br/>
-          明日の再挑戦をお待ちしています。
+          知能診断は「1週間に1回」限定です。最新の結果は履歴一覧から確認できます。<br/>
+          前回の診断から1週間経過後に再挑戦が可能になります。
         </p>
         <button onClick={() => setStep('start')} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg hover:bg-indigo-700 transition-all">履歴一覧へ戻る</button>
       </div>
@@ -131,8 +146,8 @@ export const IQTest: React.FC<IQTestProps> = ({ studentName, grade, userId, iqHi
             <p className="text-slate-400 font-black tracking-widest text-[10px] uppercase">Scientific Assessment powered by Gemini 3</p>
           </div>
           <p className="text-slate-600 font-bold max-w-lg mx-auto leading-relaxed text-sm">
-            全デバイス共通で「1日1回」限定の真剣勝負です。<br/>
-            あなたの認知的特性と強みを最新のAIが抽出します。
+            本気で挑む「1週間に1回」限定の知能診断です。<br/>
+            20問のテストを通じて、あなたの認知的特性と強みを最新のAIが抽出します。
           </p>
           <button onClick={startTest} className="px-16 py-6 bg-indigo-600 text-white rounded-[2.5rem] font-black text-xl shadow-2xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-4 mx-auto">
             診断を開始する
