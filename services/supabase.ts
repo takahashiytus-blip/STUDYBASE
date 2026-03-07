@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Vite environment variables
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL?.trim();
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY?.trim();
+const getEnv = (key: string) => {
+  return ((import.meta as any).env[key] || (window as any).process?.env?.[key] || "").trim();
+};
+
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
 console.log("[Supabase] Initializing...");
 if (supabaseUrl) {
