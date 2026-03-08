@@ -66,29 +66,35 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [timerMode, setTimerMode] = useState<'up' | 'down'>('up');
   const [advisorMessage, setAdvisorMessage] = useState<string>('「目標に向かって、一歩ずつ進んでいきましょう。継続は力なり！」');
   const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
+  const hasFetchedAdvice = useRef(false);
+
+  const fetchAdvice = async (force = false) => {
+    if (role === 'student' && currentUserStudent) {
+      if (!force && hasFetchedAdvice.current) return;
+      
+      setIsGeneratingAdvice(true);
+      try {
+        const studentReports = reports.filter(r => r.studentId === currentUserId);
+        const advice = await generateStudyAdvice(
+          currentUserStudent.name,
+          currentUserStudent.grade,
+          studentReports
+        );
+        setAdvisorMessage(`「${advice}」`);
+        hasFetchedAdvice.current = true;
+      } catch (error) {
+        console.error('Failed to generate study advice:', error);
+      } finally {
+        setIsGeneratingAdvice(false);
+      }
+    }
+  };
 
   useEffect(() => {
-    const fetchAdvice = async () => {
-      if (role === 'student' && currentUserStudent) {
-        setIsGeneratingAdvice(true);
-        try {
-          const studentReports = reports.filter(r => r.studentId === currentUserId);
-          const advice = await generateStudyAdvice(
-            currentUserStudent.name,
-            currentUserStudent.grade,
-            studentReports
-          );
-          setAdvisorMessage(`「${advice}」`);
-        } catch (error) {
-          console.error('Failed to generate study advice:', error);
-        } finally {
-          setIsGeneratingAdvice(false);
-        }
-      }
-    };
-
-    fetchAdvice();
-  }, [role, currentUserId, currentUserStudent, reports]);
+    if (role === 'student' && currentUserStudent && !hasFetchedAdvice.current) {
+      fetchAdvice();
+    }
+  }, [role, currentUserId, currentUserStudent]);
   const [customMins, setCustomMins] = useState('25');
   const timerRef = useRef<number | null>(null);
 
@@ -636,10 +642,20 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
             )}
             {currentUserStudent?.weeklyInstructorMessage && (<div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-200 shadow-md"><h4 className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-4 flex items-center gap-2"><span>👨‍🏫</span> 講師からの言葉</h4><p className="text-sm font-bold text-slate-800 leading-relaxed italic">「{currentUserStudent.weeklyInstructorMessage}」</p></div>)}
-            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-lg">
+            <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-lg relative group">
               <h4 className="text-[10px] font-black text-indigo-100 uppercase mb-4 flex justify-between items-center">
                 <span>Study Advisor</span>
-                {isGeneratingAdvice && <span className="animate-pulse text-[8px]">AI生成中...</span>}
+                <div className="flex items-center gap-2">
+                  {isGeneratingAdvice && <span className="animate-pulse text-[8px]">AI生成中...</span>}
+                  <button 
+                    onClick={() => fetchAdvice(true)} 
+                    disabled={isGeneratingAdvice}
+                    className="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-[10px] transition-all"
+                    title="アドバイスを更新"
+                  >
+                    🔄
+                  </button>
+                </div>
               </h4>
               <p className="text-[15px] font-bold leading-relaxed italic text-white drop-shadow-sm">
                 {advisorMessage}
