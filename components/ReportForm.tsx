@@ -128,21 +128,20 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
   };
 
   const handleGenerate = async () => {
-    console.log("[ReportForm] handleGenerate triggered");
     if (!selectedStudentId || !subject || !rawNotes) {
       setErrorMessage('生徒名、科目、指導メモを入力してください。');
       return;
     }
     setIsGenerating(true);
     setErrorMessage(null);
+    console.log("[ReportForm] Starting AI generation...");
     try {
       const student = students.find(s => s.id === selectedStudentId);
-      console.log("[ReportForm] Calling generateProfessionalReport for:", student?.name);
       const content = await generateProfessionalReport(student?.name || '生徒', subject, rawNotes, homeworkAssigned || '特になし', attendanceStatus, Number(quizScore) || undefined, homeworkCompletion);
-      console.log("[ReportForm] Generation success:", content);
       setGeneratedPreview(content);
+      console.log("[ReportForm] AI generation successful");
     } catch (error: any) {
-      console.error("[ReportForm] Generation error:", error);
+      console.error("[ReportForm] AI generation failed:", error);
       let msg = "AI生成中にエラーが発生しました。";
       if (error.message?.includes("API Key")) {
         msg = "Gemini APIキーが設定されていません。管理者に確認してください。";
@@ -297,15 +296,20 @@ const ReportForm: React.FC<ReportFormProps> = ({ students, currentUser, onSave }
             </div>
           </div>
 
-          <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-5 rounded-2xl font-black text-white transition-all shadow-xl active:scale-95 ${isGenerating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-            {isGenerating ? "AI生成中..." : "✨ AIによる学習計画生成"}
-          </button>
-          
           {errorMessage && (
             <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-bold animate-shake">
               ⚠️ {errorMessage}
             </div>
           )}
+
+          <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-5 rounded-2xl font-black text-white transition-all shadow-xl active:scale-95 ${isGenerating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+            {isGenerating ? (
+              <div className="flex items-center justify-center gap-2">
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>AI生成中...</span>
+              </div>
+            ) : "✨ AIによる学習計画生成"}
+          </button>
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col min-h-[600px]">

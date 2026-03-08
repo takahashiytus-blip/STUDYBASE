@@ -419,7 +419,7 @@ const App: React.FC = () => {
       if (groupLogData) {
         setGroupLessonLogs(groupLogData.map((g: any) => ({
           id: String(g.id), timetableId: String(g.timetable_id ?? g.timetableId), date: g.date,
-          content: g.content, testResults: g.test_results ?? g.testResults, 
+          content: g.content, instructorComments: g.instructor_comments ?? g.test_results ?? g.testResults, 
           homework: g.homework, pdfUrl: g.pdf_url ?? g.pdfUrl, pdfName: g.pdf_name ?? g.pdfName
         })));
       }
@@ -903,7 +903,7 @@ const App: React.FC = () => {
         }
         const upsertData = newLogs.map(l => ({
           id: l.id, timetable_id: l.timetableId, date: l.date,
-          content: l.content, test_results: l.testResults, homework: l.homework,
+          content: l.content, instructor_comments: l.instructorComments, homework: l.homework,
           pdf_url: l.pdfUrl, pdf_name: l.pdfName
         }));
         if (upsertData.length > 0) {

@@ -126,7 +126,7 @@ export interface GroupLessonLog {
   timetableId: string; // どの授業枠か
   date: string; // 実施日 (YYYY-MM-DD)
   content: string; // 授業内容
-  testResults: string; // テスト結果
+  instructorComments: string; // 講師コメント
   homework: string; // 宿題
   pdfUrl?: string; // PDFファイルのURL (またはbase64)
   pdfName?: string; // PDFファイル名

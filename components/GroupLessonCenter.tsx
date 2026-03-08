@@ -46,7 +46,7 @@ export const GroupLessonCenter: React.FC<GroupLessonCenterProps> = ({
       timetableId: editingLog.timetableId,
       date: selectedDate,
       content: editingLog.content || '',
-      testResults: editingLog.testResults || '',
+      instructorComments: editingLog.instructorComments || '',
       homework: editingLog.homework || '',
       pdfUrl: editingLog.pdfUrl,
       pdfName: editingLog.pdfName,
@@ -145,10 +145,10 @@ export const GroupLessonCenter: React.FC<GroupLessonCenterProps> = ({
                           <p className="text-[9px] font-black text-slate-400 uppercase mb-1">授業内容</p>
                           <p className="text-xs text-slate-600 leading-relaxed">{log.content}</p>
                         </div>
-                        {log.testResults && (
+                        {log.instructorComments && (
                           <div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">テスト結果</p>
-                            <p className="text-xs text-slate-600 leading-relaxed">{log.testResults}</p>
+                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">講師コメント</p>
+                            <p className="text-xs text-slate-600 leading-relaxed">{log.instructorComments}</p>
                           </div>
                         )}
                         {log.homework && (
@@ -205,11 +205,11 @@ export const GroupLessonCenter: React.FC<GroupLessonCenterProps> = ({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">テスト結果</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">講師コメント</label>
                       <textarea 
-                        value={editingLog.testResults || ''}
-                        onChange={e => setEditingLog({ ...editingLog, testResults: e.target.value })}
-                        placeholder="小テストの結果など..."
+                        value={editingLog.instructorComments || ''}
+                        onChange={e => setEditingLog({ ...editingLog, instructorComments: e.target.value })}
+                        placeholder="授業の様子や特記事項..."
                         className="w-full h-24 bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 font-bold text-sm outline-none focus:border-indigo-500 transition-all resize-none"
                       />
                     </div>
@@ -252,6 +252,33 @@ export const GroupLessonCenter: React.FC<GroupLessonCenterProps> = ({
                 >
                   保存する
                 </button>
+
+                {/* Past Logs Section */}
+                <div className="mt-12 pt-12 border-t border-slate-100">
+                  <h4 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
+                    <span>📚</span> 過去のログ
+                  </h4>
+                  <div className="space-y-4">
+                    {logs
+                      .filter(l => l.timetableId === editingLog.timetableId && l.date !== selectedDate)
+                      .sort((a, b) => b.date.localeCompare(a.date))
+                      .slice(0, 5)
+                      .map(pastLog => (
+                        <div key={pastLog.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] font-black text-indigo-500">{pastLog.date}</span>
+                          </div>
+                          <p className="text-xs text-slate-600 line-clamp-2 mb-1">{pastLog.content}</p>
+                          {pastLog.instructorComments && (
+                            <p className="text-[10px] text-slate-400 italic">コメントあり</p>
+                          )}
+                        </div>
+                      ))}
+                    {logs.filter(l => l.timetableId === editingLog.timetableId && l.date !== selectedDate).length === 0 && (
+                      <p className="text-xs text-slate-400 italic text-center py-4">過去のログはありません</p>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200 p-12 text-center">

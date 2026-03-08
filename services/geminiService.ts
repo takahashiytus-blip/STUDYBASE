@@ -5,7 +5,9 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.API_KEY || 
+                   process.env.GEMINI_API_KEY || 
+                   (import.meta as any).env?.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("Gemini API Key is not set in environment variables.");
     }
@@ -43,9 +45,8 @@ export const generateProfessionalReport = async (
 ) => {
   return withRetry(async () => {
     const ai = getAI();
-    console.log("[Gemini] Generating report for:", studentName);
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `プロの塾講師として保護者向けの報告書をJSON形式で生成してください。
       生徒:${studentName} 科目:${subject} 出欠:${attendanceStatus} 宿題完了率:${homeworkCompletion}% メモ:${rawNotes} 宿題内容:${homeworkAssigned}`,
       config: {
@@ -80,7 +81,6 @@ export const generateProfessionalReport = async (
         }
       }
     });
-    console.log("[Gemini] Response received:", response.text);
     const parsed = JSON.parse(response.text || "{}");
     
     // 必須フィールドの欠落を補完
@@ -108,7 +108,7 @@ export const generateIQAnalysis = async (
   return withRetry(async () => {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `知能・認知特性診断結果を分析してください。
       生徒: ${studentName}, 学年: ${grade}, 総合スコア: ${score}/100
       カテゴリ得点: 論理:${breakdown.logical}%, 数値:${breakdown.numerical}%, 言語:${breakdown.verbal}%, 空間:${breakdown.spatial}%
@@ -202,7 +202,7 @@ export const validateDisplayName = async (name: string): Promise<{ isValid: bool
   return withRetry(async () => {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-flash-lite-preview",
       contents: `名前が適切か判定: "${name}"`,
       config: {
         responseMimeType: "application/json",
@@ -228,7 +228,7 @@ export const generateStudyAdvice = async (
   return withRetry(async () => {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-flash-lite-preview",
       contents: `生徒「${studentName}」への学習アドバイスを100文字以内で生成してください。
       学年: ${grade}
       最近の指導報告: ${JSON.stringify(recentReports.slice(0, 3))}
