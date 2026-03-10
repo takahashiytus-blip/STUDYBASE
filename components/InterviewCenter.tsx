@@ -12,6 +12,8 @@ interface InterviewCenterProps {
   canGenerate: boolean;
   interviewRecords: InterviewRecord[];
   interviewSlots: InterviewSlot[];
+  currentUser: { id: string; name: string };
+  onSaveRecord: (record: InterviewRecord) => void;
 }
 
 export const InterviewCenter: React.FC<InterviewCenterProps> = ({ 
@@ -21,11 +23,36 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({
   adminConfig, 
   canGenerate, 
   interviewRecords = [], 
-  interviewSlots = [] 
+  interviewSlots = [],
+  currentUser,
+  onSaveRecord
 }) => {
   const [selectedSid, setSelectedSid] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [material, setMaterial] = useState<any>(null);
+
+  const handleSaveToCloud = async () => {
+    if (!material || !selectedSid) return;
+    setIsSaving(true);
+    try {
+      const newRecord: InterviewRecord = {
+        id: `irec-ai-${Date.now()}`,
+        studentId: selectedSid,
+        date: getLocalISOString().split('T')[0],
+        interviewerName: currentUser.name,
+        content: `AI生成面談資料: ${material.growthPoints.substring(0, 50)}...`,
+        nextActions: material.parentAdvice,
+        aiMaterial: material
+      };
+      await onSaveRecord(newRecord);
+      alert("面談資料をクラウドに保存しました。面談予約・記録タブから過去分を確認できます。");
+    } catch (e) {
+      alert("保存に失敗しました。");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!selectedSid) return;
@@ -128,7 +155,16 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({
                <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
                <h4 className="text-sm font-black text-indigo-600 uppercase tracking-widest mb-8 border-b border-indigo-50 pb-4 flex justify-between items-center">
                  受験戦略・推奨校
-                 <span className="text-[10px] text-slate-400 font-bold tracking-normal italic">Powered by Data Analysis</span>
+                 <div className="flex gap-2">
+                   <button 
+                     onClick={handleSaveToCloud} 
+                     disabled={isSaving}
+                     className="px-4 py-2 bg-emerald-600 text-white text-[10px] rounded-xl hover:bg-emerald-700 transition-all shadow-lg flex items-center gap-2"
+                   >
+                     {isSaving ? '保存中...' : '☁️ クラウド上に保存'}
+                   </button>
+                   <span className="text-[10px] text-slate-400 font-bold tracking-normal italic">Powered by Data Analysis</span>
+                 </div>
                </h4>
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 relative z-10">
                  <div className="space-y-4">

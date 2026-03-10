@@ -337,7 +337,9 @@ const App: React.FC = () => {
         setReports(reportData
           .filter((r: any) => validStudentIds.has(String(r.student_id ?? r.studentId)))
           .map((r: any) => ({
-            id: String(r.id), studentId: String(r.student_id ?? r.studentId), date: r.date, subject: r.subject, 
+            id: String(r.id), studentId: String(r.student_id ?? r.studentId), 
+            date: String(r.date).split('T')[0].split(' ')[0], 
+            subject: r.subject, 
             instructorName: r.instructor_name ?? r.instructorName,
             sessionYear: r.session_year ?? r.sessionYear, sessionMonth: r.session_month ?? r.sessionMonth, sessionCount: r.session_count ?? r.sessionCount,
             attendanceStatus: r.attendance_status ?? r.attendanceStatus,
@@ -357,7 +359,8 @@ const App: React.FC = () => {
           .filter((m: any) => validStudentIds.has(String(m.student_id ?? m.studentId)))
           .map((m: any) => ({ 
             id: String(m.id), studentId: String(m.student_id ?? m.studentId), examName: m.exam_name ?? m.examName, 
-            examDate: m.exam_date ?? m.examDate, scores: m.scores ?? {} 
+            examDate: String(m.exam_date ?? m.examDate).split('T')[0].split(' ')[0], 
+            scores: m.scores ?? {} 
           }))
         );
       }
@@ -384,7 +387,9 @@ const App: React.FC = () => {
         setAllSessions(sessionData
           .filter((s: any) => validStudentIds.has(String(s.student_id ?? s.studentId)))
           .map((s: any) => ({ 
-            id: String(s.id), studentId: String(s.student_id ?? s.studentId), date: s.date, subject: s.subject, minutes: s.minutes 
+            id: String(s.id), studentId: String(s.student_id ?? s.studentId), 
+            date: String(s.date).split('T')[0].split(' ')[0], 
+            subject: s.subject, minutes: s.minutes 
           }))
         );
       }
@@ -394,7 +399,7 @@ const App: React.FC = () => {
           id: String(s.id), 
           interviewerId: String(s.interviewer_id ?? s.interviewerId), 
           interviewerName: s.interviewer_name ?? s.interviewerName,
-          date: s.date, 
+          date: String(s.date).split('T')[0].split(' ')[0], 
           startTime: s.start_time ?? s.startTime, 
           endTime: s.end_time ?? s.endTime,
           status: s.status, 
@@ -409,18 +414,24 @@ const App: React.FC = () => {
         setInterviewRecords(recordsData.map((r: any) => ({
           id: String(r.id), 
           studentId: String(r.student_id ?? r.studentId), 
-          date: r.date,
+          date: String(r.date).split('T')[0].split(' ')[0],
           interviewerName: r.interviewer_name ?? r.interviewerName, 
           content: r.content, 
-          nextActions: r.next_actions ?? r.nextActions
+          nextActions: r.next_actions ?? r.nextActions,
+          aiMaterial: r.ai_material ?? r.aiMaterial
         })));
       }
 
       if (groupLogData) {
         setGroupLessonLogs(groupLogData.map((g: any) => ({
-          id: String(g.id), timetableId: String(g.timetable_id ?? g.timetableId), date: g.date,
-          content: g.content, instructorComments: g.instructor_comments ?? g.test_results ?? g.testResults, 
-          homework: g.homework, pdfUrl: g.pdf_url ?? g.pdfUrl, pdfName: g.pdf_name ?? g.pdfName
+          id: String(g.id), 
+          timetableId: String(g.timetable_id ?? g.timetableId), 
+          date: String(g.date).split('T')[0].split(' ')[0],
+          content: g.content, 
+          instructorComments: g.instructor_comments ?? g.test_results ?? g.testResults, 
+          homework: g.homework, 
+          pdfUrl: g.pdf_url ?? g.pdfUrl, 
+          pdfName: g.pdf_name ?? g.pdfName
         })));
       }
 
@@ -895,11 +906,13 @@ const App: React.FC = () => {
 
   const handleUpdateGroupLessonLogs = async (newLogs: GroupLessonLog[], deletedIds?: string[]) => {
     startUpdate();
+    const prevLogs = [...groupLessonLogs];
     try {
       setGroupLessonLogs(newLogs);
       if (isSupabaseConfigured && supabase) {
         if (deletedIds && deletedIds.length > 0) {
-          await supabase.from('group_lesson_logs').delete().in('id', deletedIds);
+          const { error: delError } = await supabase.from('group_lesson_logs').delete().in('id', deletedIds);
+          if (delError) throw delError;
         }
         const upsertData = newLogs.map(l => ({
           id: l.id, timetable_id: l.timetableId, date: l.date,
@@ -907,9 +920,16 @@ const App: React.FC = () => {
           pdf_url: l.pdfUrl, pdf_name: l.pdfName
         }));
         if (upsertData.length > 0) {
-          await supabase.from('group_lesson_logs').upsert(upsertData, { onConflict: 'id' });
+          const { error: upsertError } = await supabase.from('group_lesson_logs').upsert(upsertData, { onConflict: 'id' });
+          if (upsertError) throw upsertError;
         }
       }
+      showToast('授業ログを保存しました');
+    } catch (err) {
+      console.error('[GroupLesson] Update error:', err);
+      setGroupLessonLogs(prevLogs);
+      showToast('授業ログの保存に失敗しました', 'error');
+      throw err; // Re-throw to allow caller to handle UI state
     } finally { endUpdate(); }
   };
 
@@ -1112,7 +1132,8 @@ const App: React.FC = () => {
         }
         const upsertData = newRecords.map(r => ({
           id: r.id, student_id: r.studentId, date: r.date,
-          interviewer_name: r.interviewerName, content: r.content, next_actions: r.nextActions
+          interviewer_name: r.interviewerName, content: r.content, next_actions: r.nextActions,
+          ai_material: r.aiMaterial
         }));
         if (upsertData.length > 0) {
           const { error: upsertError } = await supabase.from('interview_records').upsert(upsertData, { onConflict: 'id' });
@@ -1147,6 +1168,7 @@ const App: React.FC = () => {
           interviewSlots={interviewSlots}
           interviewRecords={interviewRecords}
           adminConfig={adminConfig}
+          groupLessonLogs={groupLessonLogs}
         />;
       case 'create': return <ReportForm students={students} currentUser={currentUser} onSave={handleSaveReport} />;
       case 'reports': return <ReportList reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
@@ -1163,6 +1185,8 @@ const App: React.FC = () => {
           canGenerate={canGenerate} 
           interviewRecords={interviewRecords}
           interviewSlots={interviewSlots}
+          currentUser={currentUser}
+          onSaveRecord={(rec) => handleUpdateInterviewRecords([...interviewRecords, rec])}
         />;
       case 'interview-management':
         return <InterviewManagement 
@@ -1174,7 +1198,22 @@ const App: React.FC = () => {
           onUpdateSlots={handleUpdateInterviewSlots} 
           onUpdateRecords={handleUpdateInterviewRecords} 
         />;
-      case 'students': return <StudentCenter students={students} reports={reports} allSessions={allSessions} instructors={allInstructors} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} />;
+      case 'students': return <StudentCenter 
+        students={students} 
+        reports={reports} 
+        allSessions={allSessions} 
+        instructors={allInstructors} 
+        currentUser={currentUser} 
+        interviewRecords={interviewRecords}
+        onAddMessage={handleAddReportMessage} 
+        onDeleteMessage={handleDeleteReportMessage} 
+        onMarkResolved={(rid) => handleUpdateReport(rid, { needsAction: false })} 
+        onUpdateReport={handleUpdateReport} 
+        onDeleteReport={handleDeleteReport} 
+        onAddStudent={handleAddStudent} 
+        onUpdateStudent={handleUpdateStudent} 
+        onDeleteStudent={handleDeleteStudent} 
+      />;
       case 'instructors': return <InstructorCenter instructors={allInstructors} students={students} onAssignStudent={async (sid, iid) => {
           const s = students.find(std => std.id === sid);
           await handleUpdateStudent(sid, { instructorIds: Array.from(new Set([...(s?.instructorIds || []), iid])) });
@@ -1195,7 +1234,7 @@ const App: React.FC = () => {
         />;
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={allInstructors} onUpdate={handleUpdateTimetable} />;
-      case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} onSync={() => fetchAllData(false)} students={students} instructors={instructors} />;
+      case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} onSync={() => fetchAllData(false)} showToast={showToast} students={students} instructors={instructors} />;
       default: return <div className="p-10 text-center text-slate-400 font-bold italic">Module not found.</div>;
     }
   };

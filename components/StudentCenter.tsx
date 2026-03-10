@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Student, Report, UserRole, StudySession, IQResult } from '../types';
+import { Student, Report, UserRole, StudySession, IQResult, InterviewRecord } from '../types';
 import { FACULTY_OPTIONS, SUBJECT_CONFIG } from '../constants';
 import ReportList from './ReportList';
 import { getLocalISOString, parseSafeDate, generateUniqueId } from '../utils';
@@ -12,6 +12,7 @@ interface StudentCenterProps {
   allSessions: StudySession[];
   instructors: { id: string; name: string }[];
   currentUser: { role: UserRole; id: string; name: string };
+  interviewRecords: InterviewRecord[];
   onAddMessage: (reportId: string, text: string) => void;
   onDeleteMessage: (reportId: string, messageId: string) => void;
   onMarkResolved: (reportId: string) => void;
@@ -23,7 +24,7 @@ interface StudentCenterProps {
 }
 
 export const StudentCenter: React.FC<StudentCenterProps> = ({ 
-  students, reports, allSessions, instructors, currentUser, 
+  students, reports, allSessions, instructors, currentUser, interviewRecords = [],
   onAddMessage, onDeleteMessage, onMarkResolved, onUpdateReport, onDeleteReport, onAddStudent, onUpdateStudent, onDeleteStudent 
 }) => {
   console.log("[StudentCenter] Received students count:", students.length);
@@ -31,6 +32,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [expandedAiRecId, setExpandedAiRecId] = useState<string | null>(null);
   const [attendanceRange, setAttendanceRange] = useState({
     start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
@@ -38,6 +40,10 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
 
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
   const studentReports = useMemo(() => reports.filter(r => r.studentId === selectedStudentId), [reports, selectedStudentId]);
+  const studentInterviewRecords = useMemo(() => 
+    interviewRecords.filter(r => r.studentId === selectedStudentId).sort((a, b) => b.date.localeCompare(a.date)),
+    [interviewRecords, selectedStudentId]
+  );
   
   const attendanceCount = useMemo(() => {
     if (!selectedStudentId) return 0;
@@ -388,6 +394,83 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                         )}
                       </div>
                     </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[3rem] p-8 md:p-10 border border-slate-100 shadow-sm">
+                <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-3">
+                  <span>📅</span> 面談記録・AI分析履歴
+                </h3>
+                <div className="space-y-4">
+                  {studentInterviewRecords.map(record => (
+                    <div key={record.id} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-sm font-black text-slate-800">{record.date}</p>
+                          <p className="text-[10px] font-bold text-slate-400">担当: {record.interviewerName}</p>
+                        </div>
+                        {record.aiMaterial && (
+                          <span className="px-3 py-1 bg-indigo-100 text-indigo-600 text-[9px] font-black rounded-full uppercase tracking-widest">AI Generated</span>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">面談内容</p>
+                          <p className="text-xs font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">{record.content}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">次回アクション</p>
+                          <p className="text-xs font-bold text-slate-700 leading-relaxed whitespace-pre-wrap">{record.nextActions}</p>
+                        </div>
+                      </div>
+
+                      {record.aiMaterial && (
+                        <div className="pt-4 border-t border-slate-200">
+                          <button 
+                            onClick={() => setExpandedAiRecId(expandedAiRecId === record.id ? null : record.id)}
+                            className="text-[10px] font-black text-indigo-600 flex items-center gap-2 hover:text-indigo-700 transition-colors"
+                          >
+                            {expandedAiRecId === record.id ? '🔼 AI分析詳細を閉じる' : '🔽 AI分析詳細を表示'}
+                          </button>
+                          {expandedAiRecId === record.id && (
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
+                              <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3">
+                                <div>
+                                  <p className="text-[8px] font-black text-emerald-600 uppercase mb-1">成長点</p>
+                                  <p className="text-[10px] font-bold text-slate-600 leading-relaxed">{record.aiMaterial.growthPoints}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] font-black text-rose-600 uppercase mb-1">課題</p>
+                                  <p className="text-[10px] font-bold text-slate-600 leading-relaxed">{record.aiMaterial.challenges}</p>
+                                </div>
+                              </div>
+                              <div className="bg-white p-4 rounded-xl border border-slate-100 space-y-3">
+                                <div>
+                                  <p className="text-[8px] font-black text-indigo-600 uppercase mb-1">推奨校</p>
+                                  <p className="text-[9px] font-bold text-slate-500">公立: {record.aiMaterial.suggestedSchools.public.challenge.join(', ')} / {record.aiMaterial.suggestedSchools.public.realistic.join(', ')}</p>
+                                  <p className="text-[9px] font-bold text-slate-500">私立: {record.aiMaterial.suggestedSchools.private.challenge.join(', ')} / {record.aiMaterial.suggestedSchools.private.solid.join(', ')}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] font-black text-slate-600 uppercase mb-1">推奨学習時間</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {record.aiMaterial.requiredStudyHours.subjectBreakdown.map((s, idx) => (
+                                      <span key={idx} className="px-1.5 py-0.5 bg-slate-50 rounded text-[8px] font-bold border border-slate-100">{s.subject}: {s.hours}h</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {studentInterviewRecords.length === 0 && (
+                    <p className="text-center py-10 text-slate-400 font-bold text-sm bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
+                      過去の面談記録はありません
+                    </p>
                   )}
                 </div>
               </div>

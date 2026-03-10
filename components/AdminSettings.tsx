@@ -4,13 +4,14 @@ import { AdminConfig, Student, Instructor } from '../types';
 
 interface AdminSettingsProps {
   adminConfig: AdminConfig;
-  onUpdate: (updates: Partial<AdminConfig>) => void;
+  onUpdate: (updates: Partial<AdminConfig>) => Promise<void>;
   onSync: () => void;
+  showToast: (message: string, type?: 'success' | 'error') => void;
   students: Student[];
   instructors: Instructor[];
 }
 
-const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, onSync, students, instructors }) => {
+const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, onSync, showToast, students, instructors }) => {
   const [formData, setFormData] = useState({
     name: adminConfig.name,
     loginId: adminConfig.loginId,
@@ -24,6 +25,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
     announcementTargetIds: adminConfig.announcementTargetIds || [],
     isAnnouncementActive: adminConfig.isAnnouncementActive || false
   });
+  const [isAnnouncementSaved, setIsAnnouncementSaved] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isUserInteracting, setIsUserInteracting] = useState(false);
@@ -47,29 +49,48 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
     }
   }, [adminConfig, isUserInteracting]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSaveAnnouncement = async () => {
+    try {
+      await onUpdate({
+        announcement: formData.announcement,
+        announcementTargetIds: formData.announcementTargetIds,
+        isAnnouncementActive: formData.isAnnouncementActive
+      });
+      setIsAnnouncementSaved(true);
+      setIsUserInteracting(false);
+      setTimeout(() => setIsAnnouncementSaved(false), 3000);
+    } catch (error) {
+      console.error('Failed to save announcement:', error);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      alert('パスワードが一致しません。');
+      showToast('パスワードが一致しません。', 'error');
       return;
     }
 
-    onUpdate({
-      name: formData.name,
-      loginId: formData.loginId,
-      passwordHash: formData.password,
-      location: formData.location,
-      wordKingClassroomRecord: Number(formData.wordKingClassroomRecord),
-      wordKingClassroomHolder: formData.wordKingClassroomHolder,
-      isMaintenanceMode: formData.isMaintenanceMode,
-      announcement: formData.announcement,
-      announcementTargetIds: formData.announcementTargetIds,
-      isAnnouncementActive: formData.isAnnouncementActive
-    });
-    
-    setIsSaved(true);
-    setIsUserInteracting(false);
-    setTimeout(() => setIsSaved(false), 3000);
+    try {
+      await onUpdate({
+        name: formData.name,
+        loginId: formData.loginId,
+        passwordHash: formData.password,
+        location: formData.location,
+        wordKingClassroomRecord: Number(formData.wordKingClassroomRecord),
+        wordKingClassroomHolder: formData.wordKingClassroomHolder,
+        isMaintenanceMode: formData.isMaintenanceMode,
+        announcement: formData.announcement,
+        announcementTargetIds: formData.announcementTargetIds,
+        isAnnouncementActive: formData.isAnnouncementActive
+      });
+      
+      setIsSaved(true);
+      setIsUserInteracting(false);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (error) {
+      console.error('Failed to save admin config:', error);
+    }
   };
 
   const toggleTarget = (id: string) => {
@@ -105,9 +126,21 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
           </div>
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
+              const newValue = !formData.isAnnouncementActive;
               setIsUserInteracting(true);
-              setFormData({ ...formData, isAnnouncementActive: !formData.isAnnouncementActive });
+              setFormData({ ...formData, isAnnouncementActive: newValue });
+              try {
+                await onUpdate({
+                  isAnnouncementActive: newValue,
+                  announcement: formData.announcement,
+                  announcementTargetIds: formData.announcementTargetIds
+                });
+                setIsAnnouncementSaved(true);
+                setTimeout(() => setIsAnnouncementSaved(false), 3000);
+              } catch (error) {
+                console.error('Failed to toggle announcement:', error);
+              }
             }}
             className={`w-14 h-8 rounded-full transition-all relative ${formData.isAnnouncementActive ? 'bg-emerald-400' : 'bg-white/20'}`}
           >
@@ -179,6 +212,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
               ))}
             </div>
           </div>
+        </div>
+        <div className="px-8 pb-8 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSaveAnnouncement}
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            <span>💾</span> 配信設定を保存
+          </button>
+          {isAnnouncementSaved && <p className="text-emerald-600 font-bold text-[10px] animate-fadeIn">✓ お知らせ設定を保存しました</p>}
         </div>
       </div>
 

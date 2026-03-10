@@ -167,6 +167,19 @@ export interface InterviewRecord {
   interviewerName: string;
   content: string; // 面談内容のメモ
   nextActions: string; // 次回までのアクション
+  aiMaterial?: {
+    growthPoints: string;
+    challenges: string;
+    parentAdvice: string;
+    suggestedSchools: {
+      public: { challenge: string[]; realistic: string[] };
+      private: { challenge: string[]; solid: string[] };
+    };
+    requiredStudyHours: {
+      totalWeekly: number;
+      subjectBreakdown: { subject: string; hours: number }[];
+    };
+  };
 }
 
 export interface AppState {

@@ -36,6 +36,7 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
   const [viewSid, setViewSid] = useState('');
   const [recordContent, setRecordContent] = useState('');
   const [recordNext, setRecordNext] = useState('');
+  const [expandedAiRecId, setExpandedAiRecId] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === 'admin';
   const isInstructor = currentUser.role === 'instructor';
@@ -363,6 +364,50 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {record.aiMaterial && (
+                    <div className="mt-6 pt-6 border-t border-slate-100">
+                      <button 
+                        onClick={() => setExpandedAiRecId(expandedAiRecId === record.id ? null : record.id)}
+                        className="text-xs font-black text-indigo-600 flex items-center gap-2 hover:text-indigo-700 transition-colors"
+                      >
+                        {expandedAiRecId === record.id ? '🔼 AI分析詳細を閉じる' : '🔽 AI分析詳細を表示'}
+                      </button>
+                      {expandedAiRecId === record.id && (
+                        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
+                          <div className="space-y-4">
+                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                              <p className="text-[9px] font-black text-emerald-600 uppercase mb-2">成長点と強み</p>
+                              <p className="text-xs font-bold text-slate-700 leading-relaxed">{record.aiMaterial.growthPoints}</p>
+                            </div>
+                            <div className="bg-rose-50 p-4 rounded-2xl border border-rose-100">
+                              <p className="text-[9px] font-black text-rose-600 uppercase mb-2">現在の課題</p>
+                              <p className="text-xs font-bold text-slate-700 leading-relaxed">{record.aiMaterial.challenges}</p>
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                              <p className="text-[9px] font-black text-indigo-600 uppercase mb-2">推奨校（公立/私立）</p>
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-bold text-slate-600">公立: {record.aiMaterial.suggestedSchools.public.challenge.join(', ')} / {record.aiMaterial.suggestedSchools.public.realistic.join(', ')}</p>
+                                <p className="text-[10px] font-bold text-slate-600">私立: {record.aiMaterial.suggestedSchools.private.challenge.join(', ')} / {record.aiMaterial.suggestedSchools.private.solid.join(', ')}</p>
+                              </div>
+                            </div>
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                              <p className="text-[9px] font-black text-slate-600 uppercase mb-2">推奨学習時間</p>
+                              <div className="flex flex-wrap gap-2">
+                                {record.aiMaterial.requiredStudyHours.subjectBreakdown.map((s, idx) => (
+                                  <span key={idx} className="px-2 py-1 bg-white rounded-lg text-[10px] font-bold border border-slate-200">
+                                    {s.subject}: {s.hours}h
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

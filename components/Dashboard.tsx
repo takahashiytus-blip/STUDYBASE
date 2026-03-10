@@ -22,6 +22,7 @@ interface DashboardProps {
   interviewSlots: InterviewSlot[];
   interviewRecords: InterviewRecord[];
   adminConfig: AdminConfig;
+  groupLessonLogs?: any[];
 }
 
 const calculateRemainingDays = (targetDateStr: string) => {
@@ -52,14 +53,15 @@ const Dashboard: React.FC<DashboardProps> = ({
   onUpdateStudent,
   interviewSlots = [],
   interviewRecords = [],
-  adminConfig
+  adminConfig,
+  groupLessonLogs = []
 }) => {
   const isPrivileged = role === 'instructor' || role === 'admin';
   const isAdmin = role === 'admin';
   const isStudent = role === 'student';
 
   const showAnnouncement = adminConfig.isAnnouncementActive && adminConfig.announcement && 
-    (adminConfig.announcementTargetIds || []).includes(currentUserId);
+    (role === 'admin' || (adminConfig.announcementTargetIds || []).includes(currentUserId));
 
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -336,6 +338,19 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [timetable, currentUserId, isAdmin, role, currentUserStudent]);
 
   const currentSubjectList = isHS ? HS_SUBJECTS : JHS_SUBJECTS;
+
+  const myRecentLogs = useMemo(() => {
+    if (isPrivileged) return [];
+    const sid = currentUserStudent?.id || currentUserId;
+    const myTimetableIds = (timetable || [])
+      .filter(t => t.studentId === sid || (t.studentIds && t.studentIds.includes(sid)))
+      .map(t => t.id);
+    
+    return (groupLessonLogs || [])
+      .filter(l => myTimetableIds.includes(l.timetableId))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 3);
+  }, [groupLessonLogs, timetable, currentUserId, currentUserStudent, isPrivileged]);
 
   return (
     <div className="space-y-6 md:space-y-8 animate-fadeIn pb-12">
@@ -638,6 +653,32 @@ const Dashboard: React.FC<DashboardProps> = ({
                       </p>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+            {myRecentLogs.length > 0 && (
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span>📝</span> 最近の授業ログ
+                </h4>
+                <div className="space-y-4">
+                  {myRecentLogs.map(log => {
+                    const lesson = timetable.find(t => t.id === log.timetableId);
+                    return (
+                      <div key={log.id} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[10px] font-black text-emerald-600">{log.date}</span>
+                          <span className="text-[10px] font-black text-slate-400">{lesson?.subject}</span>
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 line-clamp-2">{log.content}</p>
+                        {log.homework && (
+                          <div className="mt-2 pt-2 border-t border-emerald-200/50">
+                            <p className="text-[10px] text-slate-500"><span className="font-bold">宿題:</span> {log.homework}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

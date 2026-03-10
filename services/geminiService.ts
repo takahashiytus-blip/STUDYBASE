@@ -23,7 +23,9 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
       return await fn();
     } catch (error: any) {
       lastError = error;
-      if (error?.message?.includes('429') || error?.status === 429) {
+      const errorMessage = error?.message || '';
+      const status = error?.status;
+      if (errorMessage.includes('429') || status === 429 || errorMessage.includes('503') || status === 503 || errorMessage.includes('UNAVAILABLE')) {
         const waitTime = Math.pow(2, i) * 2000;
         await new Promise(resolve => setTimeout(resolve, waitTime));
         continue;
@@ -46,7 +48,7 @@ export const generateProfessionalReport = async (
   return withRetry(async () => {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `プロの塾講師として保護者向けの報告書をJSON形式で生成してください。
       生徒:${studentName} 科目:${subject} 出欠:${attendanceStatus} 宿題完了率:${homeworkCompletion}% メモ:${rawNotes} 宿題内容:${homeworkAssigned}`,
       config: {
@@ -108,7 +110,7 @@ export const generateIQAnalysis = async (
   return withRetry(async () => {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `知能・認知特性診断結果を分析してください。
       生徒: ${studentName}, 学年: ${grade}, 総合スコア: ${score}/100
       カテゴリ得点: 論理:${breakdown.logical}%, 数値:${breakdown.numerical}%, 言語:${breakdown.verbal}%, 空間:${breakdown.spatial}%
@@ -136,7 +138,7 @@ export const generateInterviewMaterial = async (
   return withRetry(async () => {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: `生徒「${studentName}」の面談資料を生成。
       学年: ${grade}, 志望校: ${targetSchool || "未定"}, 志望学部: ${targetFaculty || "未定"}, 地域: ${location}
       過去の指導報告: ${JSON.stringify(reports)}
