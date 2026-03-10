@@ -205,7 +205,8 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                       <div><label className="text-xs font-black text-slate-400 ml-1">学年</label><input className={inputStyle} value={selectedStudent.grade} onChange={e => onUpdateStudent?.(selectedStudent.id, { grade: e.target.value })} /></div>
                       <div><label className="text-xs font-black text-slate-400 ml-1">志望校</label><input className={inputStyle} value={selectedStudent.targetSchool || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { targetSchool: e.target.value })} /></div>
                       <div><label className="text-xs font-black text-slate-400 ml-1">ログインID</label><input className={inputStyle} value={selectedStudent.loginId || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { loginId: e.target.value })} /></div>
-                      <div><label className="text-xs font-black text-slate-400 ml-1">パスワード</label><input className={inputStyle} value={selectedStudent.password || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { password: e.target.value })} /></div>
+                      <div><label className="text-xs font-black text-slate-400 ml-1">生徒用パスワード</label><input className={inputStyle} value={selectedStudent.password || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { password: e.target.value })} /></div>
+                      <div><label className="text-xs font-black text-slate-400 ml-1">保護者用パスワード</label><input className={inputStyle} value={selectedStudent.parentPassword || ''} onChange={e => onUpdateStudent?.(selectedStudent.id, { parentPassword: e.target.value })} /></div>
                       <div><label className="text-xs font-black text-slate-400 ml-1">StudyPlus ID</label><input className={inputStyle} value={selectedStudent.studyPlusId || ''} placeholder="連携用IDを入力" onChange={e => onUpdateStudent?.(selectedStudent.id, { studyPlusId: e.target.value })} /></div>
                       <div>
                         <label className="text-xs font-black text-slate-400 ml-1">志望系統</label>
@@ -510,6 +511,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                 grade: target.grade.value,
                 loginId: target.loginId.value,
                 password: target.password.value,
+                parentPassword: target.parentPassword.value,
                 targetSchool: target.targetSchool.value
               });
               setShowAddModal(false);
@@ -518,7 +520,8 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
               <input name="grade" placeholder="学年" required className={inputStyle} />
               <input name="targetSchool" placeholder="志望校" className={inputStyle} />
               <input name="loginId" placeholder="ログインID" required className={inputStyle} />
-              <input name="password" placeholder="パスワード" required className={inputStyle} />
+              <input name="password" placeholder="生徒用パスワード" required className={inputStyle} />
+              <input name="parentPassword" placeholder="保護者用パスワード" className={inputStyle} />
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 font-bold text-slate-400">キャンセル</button>
                 <button type="submit" className="flex-2 bg-indigo-600 text-white py-4 rounded-xl font-black shadow-lg">登録する</button>

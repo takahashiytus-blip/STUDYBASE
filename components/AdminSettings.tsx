@@ -9,9 +9,10 @@ interface AdminSettingsProps {
   showToast: (message: string, type?: 'success' | 'error') => void;
   students: Student[];
   instructors: Instructor[];
+  isPrivilegedInstructor?: boolean;
 }
 
-const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, onSync, showToast, students, instructors }) => {
+const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, onSync, showToast, students, instructors, isPrivilegedInstructor }) => {
   const [formData, setFormData] = useState({
     name: adminConfig.name,
     loginId: adminConfig.loginId,
@@ -312,39 +313,43 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">管理者表示名</label>
                 <input 
                   type="text" required
+                  disabled={isPrivilegedInstructor}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold transition-all"
+                  className={`w-full px-6 py-4 rounded-2xl border-2 outline-none font-bold transition-all ${isPrivilegedInstructor ? 'bg-slate-100 border-slate-100 text-slate-400' : 'bg-slate-50 border-slate-100 focus:border-indigo-500'}`}
                 />
               </div>
               <div className="space-y-2">
                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">教室所在地</label>
                 <input 
                   type="text" required
+                  disabled={isPrivilegedInstructor}
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold transition-all"
+                  className={`w-full px-6 py-4 rounded-2xl border-2 outline-none font-bold transition-all ${isPrivilegedInstructor ? 'bg-slate-100 border-slate-100 text-slate-400' : 'bg-slate-50 border-slate-100 focus:border-indigo-500'}`}
                 />
               </div>
             </div>
 
-            <div className="p-6 bg-red-50 rounded-2xl border border-red-100 space-y-4">
-               <div className="flex items-center justify-between">
-                 <div className="space-y-1">
-                   <label className="block text-xs font-black text-red-600 uppercase tracking-widest ml-1 flex items-center gap-2">
-                     <span>🛠️</span> メンテナンスモード
-                   </label>
-                   <p className="text-[10px] font-bold text-red-400 ml-1">有効にすると、管理者以外のログインが制限されます</p>
-                 </div>
-                 <button
-                   type="button"
-                   onClick={() => setFormData({ ...formData, isMaintenanceMode: !formData.isMaintenanceMode })}
-                   className={`w-14 h-8 rounded-full transition-all relative ${formData.isMaintenanceMode ? 'bg-red-600' : 'bg-slate-200'}`}
-                 >
-                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${formData.isMaintenanceMode ? 'left-7' : 'left-1'}`} />
-                 </button>
-               </div>
-            </div>
+            {!isPrivilegedInstructor && (
+              <div className="p-6 bg-red-50 rounded-2xl border border-red-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-black text-red-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                      <span>🛠️</span> メンテナンスモード
+                    </label>
+                    <p className="text-[10px] font-bold text-red-400 ml-1">有効にすると、管理者以外のログインが制限されます</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, isMaintenanceMode: !formData.isMaintenanceMode })}
+                    className={`w-14 h-8 rounded-full transition-all relative ${formData.isMaintenanceMode ? 'bg-red-600' : 'bg-slate-200'}`}
+                  >
+                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${formData.isMaintenanceMode ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 space-y-4">
                <label className="block text-xs font-black text-amber-600 uppercase tracking-widest ml-1 flex items-center gap-2">
@@ -372,45 +377,51 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ adminConfig, onUpdate, on
                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-50">
-              <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">ログインID</label>
-                <input 
-                  type="text" required
-                  value={formData.loginId}
-                  onChange={(e) => setFormData({ ...formData, loginId: e.target.value })}
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">パスワード</label>
-                <input 
-                  type="password" required
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold"
-                />
-              </div>
-            </div>
+            {!isPrivilegedInstructor && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-50">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">ログインID</label>
+                    <input 
+                      type="text" required
+                      value={formData.loginId}
+                      onChange={(e) => setFormData({ ...formData, loginId: e.target.value })}
+                      className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">パスワード</label>
+                    <input 
+                      type="password" required
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold"
+                    />
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">パスワード（確認）</label>
-              <input 
-                type="password" required
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold"
-              />
-            </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">パスワード（確認）</label>
+                  <input 
+                    type="password" required
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 outline-none font-bold"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="pt-6 border-t border-slate-50 flex flex-col items-center gap-4">
-            <button 
-              type="submit"
-              className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-            >
-              <span>💾</span> 変更を保存する
-            </button>
+            {!isPrivilegedInstructor && (
+              <button 
+                type="submit"
+                className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black shadow-xl hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+              >
+                <span>💾</span> 変更を保存する
+              </button>
+            )}
             <button 
               type="button"
               onClick={onSync}

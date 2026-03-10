@@ -12,19 +12,21 @@ interface LayoutProps {
   setActiveTab: (tab: string) => void;
   reports: Report[];
   isCloudConnected?: boolean;
+  isPrivilegedInstructor?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, activeTab, setActiveTab, reports, isCloudConnected }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, activeTab, setActiveTab, reports, isCloudConnected, isPrivilegedInstructor }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isPrivileged = role === 'instructor' || role === 'admin';
   const isAdmin = role === 'admin';
+  const hasAdminAccess = isAdmin || isPrivilegedInstructor;
   
   const reportsWithAction = reports.filter(r => r.needsAction).length;
 
   const navItems = isPrivileged
     ? [
         { id: 'dashboard', label: 'ダッシュボード', icon: '📊' },
-        ...(isAdmin ? [
+        ...(hasAdminAccess ? [
           { id: 'instructors', label: '講師管理', icon: '👨‍🏫' },
           { id: 'salary', label: '給与計算', icon: '💰' },
           { id: 'timetable', label: '時間割管理', icon: '📅' },
@@ -50,6 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         { id: 'reports', label: '指導報告書', icon: '📄' },
         { id: 'interview-management', label: '面談予約', icon: '📅' },
         { id: 'mock', label: '模試成績', icon: '🏆' },
+        { id: 'settings', label: '設定', icon: '⚙️' },
       ];
 
   const handleTabChange = (id: string) => {

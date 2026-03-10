@@ -20,6 +20,7 @@ import AdminSettings from './components/AdminSettings';
 import MessageCenter from './components/MessageCenter';
 import InstructorCenter from './components/InstructorCenter';
 import AccountSettings from './components/AccountSettings';
+import StudentSettings from './components/StudentSettings';
 import { InterviewManagement } from './components/InterviewManagement';
 
 export { getLocalISOString, parseSafeDate };
@@ -54,8 +55,8 @@ const App: React.FC = () => {
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   
-  const [currentUser, setCurrentUser] = useState<{ role: UserRole; id: string; name: string }>({
-    role: 'student', id: '', name: ''
+  const [currentUser, setCurrentUser] = useState<{ role: UserRole; id: string; name: string; isAdmin?: boolean }>({
+    role: 'student', id: '', name: '', isAdmin: false
   });
   const [activeTab, setActiveTab] = useState('dashboard');
   
@@ -311,6 +312,7 @@ const App: React.FC = () => {
             studyPlusMinutes: s.study_plus_minutes ?? s.studyPlusMinutes ?? {},
             studyPlusLastSynced: s.study_plus_last_synced ?? s.studyPlusLastSynced,
             parentName: s.parent_name ?? s.parentName,
+            parentPassword: s.parent_password ?? s.parentPassword,
             targets: s.targets ?? undefined
           };
         });
@@ -493,9 +495,11 @@ const App: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const isMaintenance = adminConfig.isMaintenanceMode;
+    const trimmedLoginId = loginId.trim();
+    const trimmedPassword = password.trim();
 
     if (loginRole === 'admin') {
-      if (loginId === adminConfig.loginId && password === adminConfig.passwordHash) {
+      if (trimmedLoginId === adminConfig.loginId && trimmedPassword === adminConfig.passwordHash) {
         const user = { role: 'admin' as UserRole, id: 'admin', name: adminConfig.name };
         setCurrentUser(user);
         localStorage.setItem('study_base_session', JSON.stringify(user));
@@ -509,9 +513,9 @@ const App: React.FC = () => {
         alert('現在メンテナンス中のため、管理者以外はログインできません。');
         return;
       }
-      const ins = instructors.find(i => i.loginId === loginId && i.password === password);
+      const ins = instructors.find(i => i.loginId === trimmedLoginId && i.password === trimmedPassword);
       if (ins) {
-        const user = { role: 'instructor' as UserRole, id: ins.id, name: ins.name };
+        const user = { role: 'instructor' as UserRole, id: ins.id, name: ins.name, isAdmin: ins.isAdmin };
         setCurrentUser(user);
         localStorage.setItem('study_base_session', JSON.stringify(user));
         setIsAuthenticated(true);
@@ -524,15 +528,21 @@ const App: React.FC = () => {
         alert('現在メンテナンス中のため、管理者以外はログインできません。');
         return;
       }
-      const std = students.find(s => s.loginId === loginId && s.password === password);
+      
+      console.log('[Login] Attempting student/parent login:', { loginId: trimmedLoginId });
+      const std = students.find(s => s.loginId === trimmedLoginId && (s.password === trimmedPassword || (s.parentPassword && s.parentPassword === trimmedPassword)));
+      
       if (std) {
-        const user = { role: loginRole as UserRole, id: std.id, name: std.name };
+        const actualRole = (std.parentPassword === trimmedPassword && std.password !== trimmedPassword) ? 'parent' : 'student';
+        console.log('[Login] Success:', { name: std.name, role: actualRole });
+        const user = { role: actualRole as UserRole, id: std.id, name: std.name };
         setCurrentUser(user);
         localStorage.setItem('study_base_session', JSON.stringify(user));
         setIsAuthenticated(true);
         showToast(`${std.name} さんとしてログインしました`);
         return;
       }
+      console.log('[Login] Failed: No matching student found for ID and password.');
       alert('生徒・保護者ログイン情報が正しくありません。');
     }
   };
@@ -590,6 +600,7 @@ const App: React.FC = () => {
         if (updates.weeklyInstructorMessage !== undefined) dbUpdates.weekly_instructor_message = updates.weeklyInstructorMessage;
         if (updates.loginId !== undefined) dbUpdates.login_id = updates.loginId;
         if (updates.password !== undefined) dbUpdates.password = updates.password;
+        if (updates.parentPassword !== undefined) dbUpdates.parent_password = updates.parentPassword;
         if (updates.studyPlusId !== undefined) dbUpdates.study_plus_id = updates.studyPlusId;
         if (updates.studyPlusMinutes !== undefined) dbUpdates.study_plus_minutes = updates.studyPlusMinutes;
         if (updates.studyPlusLastSynced !== undefined) dbUpdates.study_plus_last_synced = updates.studyPlusLastSynced;
@@ -618,7 +629,8 @@ const App: React.FC = () => {
       setStudents(prev => [...prev, newStd]);
       if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.from('students').insert({ 
-          id, name: d.name, grade: d.grade, login_id: d.loginId, password: d.password, 
+          id, name: d.name, grade: d.grade, login_id: d.loginId, 
+          password: d.password, parent_password: d.parentPassword,
           target_school: d.targetSchool, target_faculty: d.targetFaculty 
         });
         if (error) {
@@ -1214,7 +1226,11 @@ const App: React.FC = () => {
         onUpdateStudent={handleUpdateStudent} 
         onDeleteStudent={handleDeleteStudent} 
       />;
-      case 'instructors': return <InstructorCenter instructors={allInstructors} students={students} onAssignStudent={async (sid, iid) => {
+      case 'instructors': return <InstructorCenter 
+        instructors={allInstructors} 
+        students={students} 
+        interviewRecords={interviewRecords}
+        onAssignStudent={async (sid, iid) => {
           const s = students.find(std => std.id === sid);
           await handleUpdateStudent(sid, { instructorIds: Array.from(new Set([...(s?.instructorIds || []), iid])) });
           showToast('担当生徒を追加しました');
@@ -1234,7 +1250,40 @@ const App: React.FC = () => {
         />;
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={allInstructors} onUpdate={handleUpdateTimetable} />;
-      case 'settings': return <AdminSettings adminConfig={adminConfig} onUpdate={handleUpdateAdminConfig} onSync={() => fetchAllData(false)} showToast={showToast} students={students} instructors={instructors} />;
+      case 'settings': 
+        if (currentUser.role === 'admin' || (currentUser.role === 'instructor' && currentUser.isAdmin)) {
+          return <AdminSettings 
+            adminConfig={adminConfig} 
+            onUpdate={handleUpdateAdminConfig} 
+            onSync={() => fetchAllData(false)} 
+            showToast={showToast} 
+            students={students} 
+            instructors={allInstructors} 
+            isPrivilegedInstructor={currentUser.role === 'instructor'}
+          />;
+        } else if (currentUser.role === 'instructor') {
+          const instructor = allInstructors.find(i => i.id === currentUser.id);
+          if (!instructor) return <div>Instructor not found</div>;
+          return (
+            <div className="max-w-2xl mx-auto p-8 bg-white rounded-3xl shadow-xl border border-slate-100">
+              <h2 className="text-2xl font-black text-slate-800 mb-6">講師設定</h2>
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-50 rounded-2xl">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">ログインID</p>
+                  <p className="text-lg font-bold text-slate-700">{instructor.loginId}</p>
+                </div>
+                <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
+                  <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2">パスワード設定</p>
+                  <p className="text-sm text-slate-500 font-medium mb-4">パスワードの変更は管理者にお問い合わせください</p>
+                </div>
+              </div>
+            </div>
+          );
+        } else {
+          const currentStudent = students.find(s => s.id === currentUser.id);
+          if (!currentStudent) return <div>Student not found</div>;
+          return <StudentSettings student={currentStudent} role={currentUser.role} onUpdate={handleUpdateStudent} showToast={showToast} />;
+        }
       default: return <div className="p-10 text-center text-slate-400 font-bold italic">Module not found.</div>;
     }
   };
@@ -1279,6 +1328,7 @@ const App: React.FC = () => {
       setActiveTab={setActiveTab} 
       reports={reports}
       isCloudConnected={isSupabaseConfigured}
+      isPrivilegedInstructor={currentUser.isAdmin}
     >
       {renderContent()}
       

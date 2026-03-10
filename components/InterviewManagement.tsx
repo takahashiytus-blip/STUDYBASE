@@ -93,6 +93,7 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
       id: generateUniqueId('irec'),
       studentId: recordSid,
       date: getLocalISOString().split('T')[0],
+      interviewerId: currentUser.id,
       interviewerName: currentUser.name,
       content: recordContent,
       nextActions: recordNext

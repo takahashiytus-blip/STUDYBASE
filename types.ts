@@ -12,6 +12,7 @@ export interface Student {
   weeklyInstructorMessage?: string;
   loginId?: string;
   password?: string;
+  parentPassword?: string;
   iqHistory?: IQResult[]; // IQテスト履歴
   wordKingBest?: number; // 英単語王のパーソナルベスト
   studyPlusId?: string; // StudyPlus連携用ID
@@ -47,6 +48,7 @@ export interface Instructor {
   loginId?: string;
   password?: string;
   canGenerateInterviewMaterial?: boolean; // 面談資料作成権限
+  isAdmin?: boolean; // 管理者権限（システム設定以外）
 }
 
 export interface ReportMessage {
@@ -164,6 +166,7 @@ export interface InterviewRecord {
   id: string;
   studentId: string;
   date: string;
+  interviewerId?: string; // 追加: 講師ID
   interviewerName: string;
   content: string; // 面談内容のメモ
   nextActions: string; // 次回までのアクション

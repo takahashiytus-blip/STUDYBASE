@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Instructor, Student } from '../types';
+import { Instructor, Student, InterviewRecord } from '../types';
 
 interface InstructorCenterProps {
   instructors: Instructor[];
   students: Student[];
+  interviewRecords: InterviewRecord[];
   onAssignStudent: (studentId: string, instructorId: string) => void;
   onRemoveStudent: (studentId: string, instructorId: string) => void;
   onUpdateInstructor: (instructorId: string, updates: Partial<Instructor>) => void;
@@ -15,6 +16,7 @@ interface InstructorCenterProps {
 const InstructorCenter: React.FC<InstructorCenterProps> = ({ 
   instructors, 
   students, 
+  interviewRecords = [],
   onAssignStudent, 
   onRemoveStudent,
   onUpdateInstructor,
@@ -24,20 +26,28 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
   const [selectedInstructorId, setSelectedInstructorId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'management' | 'statistics'>('management');
   
   const [editName, setEditName] = useState('');
   const [editSpecialty, setEditSpecialty] = useState('');
   const [editLoginId, setEditLoginId] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editCanGenerateInterviewMaterial, setEditCanGenerateInterviewMaterial] = useState(false);
+  const [editIsAdmin, setEditIsAdmin] = useState(false);
 
   const [addFormData, setAddFormData] = useState({ 
     name: '', 
     specialty: '数学・理科', 
     loginId: '', 
     password: '',
-    canGenerateInterviewMaterial: false 
+    canGenerateInterviewMaterial: false,
+    isAdmin: false
   });
+
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(now.toISOString().split('T')[0]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -67,6 +77,7 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
     setEditLoginId(selectedInstructor.loginId || '');
     setEditPassword(selectedInstructor.password || '');
     setEditCanGenerateInterviewMaterial(selectedInstructor.canGenerateInterviewMaterial || false);
+    setEditIsAdmin(selectedInstructor.isAdmin || false);
     setIsEditing(true);
   };
 
@@ -77,7 +88,8 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
       specialty: editSpecialty,
       loginId: editLoginId,
       password: editPassword,
-      canGenerateInterviewMaterial: editCanGenerateInterviewMaterial
+      canGenerateInterviewMaterial: editCanGenerateInterviewMaterial,
+      isAdmin: editIsAdmin
     });
     setIsEditing(false);
   };
@@ -92,7 +104,8 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
         specialty: '数学・理科', 
         loginId: '', 
         password: '',
-        canGenerateInterviewMaterial: false 
+        canGenerateInterviewMaterial: false,
+        isAdmin: false
       });
     }
   };
@@ -109,6 +122,28 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
     }
   };
 
+  const interviewStats = useMemo(() => {
+    const stats: Record<string, { name: string; count: number }> = {};
+    
+    // Initialize stats for all instructors
+    instructors.forEach(ins => {
+      stats[ins.id] = { name: ins.name, count: 0 };
+    });
+
+    // Count records in range
+    interviewRecords.forEach(rec => {
+      if (rec.date >= startDate && rec.date <= endDate) {
+        // Try to find instructor by ID or Name
+        const instructor = instructors.find(i => i.id === rec.interviewerId || i.name === rec.interviewerName);
+        if (instructor) {
+          stats[instructor.id].count++;
+        }
+      }
+    });
+
+    return Object.values(stats).sort((a, b) => b.count - a.count);
+  }, [instructors, interviewRecords, startDate, endDate]);
+
   const inputStyle = "w-full px-5 py-3 rounded-2xl border-2 border-slate-200 bg-white text-slate-900 font-bold outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm placeholder:text-slate-300";
 
   return (
@@ -118,14 +153,21 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
           <h2 className="text-3xl font-black text-slate-800">講師・生徒管理</h2>
           <p className="text-slate-500 font-medium">講師の基本情報、およびログインアカウントの設定を行います</p>
         </div>
-        {onAddInstructor && (
-          <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2">
-            <span>＋</span> 新規講師を登録
-          </button>
-        )}
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex bg-slate-100 p-1 rounded-2xl">
+            <button onClick={() => setActiveTab('management')} className={`px-6 py-2 rounded-xl text-sm font-black transition-all ${activeTab === 'management' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>講師管理</button>
+            <button onClick={() => setActiveTab('statistics')} className={`px-6 py-2 rounded-xl text-sm font-black transition-all ${activeTab === 'statistics' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>面談集計</button>
+          </div>
+          {onAddInstructor && activeTab === 'management' && (
+            <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-2">
+              <span>＋</span> 新規講師を登録
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      {activeTab === 'management' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Instructor List (Left Side) */}
         <div className="lg:col-span-4 space-y-4">
           <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest px-2">講師一覧</h3>
@@ -314,6 +356,21 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                         <p className="text-[10px] text-slate-400 font-medium">この講師に「面談資料作成（高度な分析）」の使用を許可します</p>
                       </div>
                     </label>
+
+                    <label className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl cursor-pointer hover:bg-indigo-50 transition-colors group">
+                      <div className="relative flex items-center">
+                        <input 
+                          type="checkbox" 
+                          checked={editIsAdmin}
+                          onChange={(e) => setEditIsAdmin(e.target.checked)}
+                          className="w-6 h-6 rounded-lg border-2 border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">管理者権限（準管理者）</p>
+                        <p className="text-[10px] text-slate-400 font-medium">システム設定以外の全管理機能へのアクセスを許可します</p>
+                      </div>
+                    </label>
                   </div>
                 </div>
               ) : (
@@ -331,7 +388,7 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                     </div>
                   </div>
 
-                  <div className="pb-4">
+                  <div className="pb-4 space-y-3">
                     <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${selectedInstructor.canGenerateInterviewMaterial ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
                         {selectedInstructor.canGenerateInterviewMaterial ? '✓' : '✕'}
@@ -340,6 +397,18 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                         <p className="text-xs font-black text-slate-800">面談資料作成権限</p>
                         <p className="text-[10px] text-slate-500 font-medium">
                           {selectedInstructor.canGenerateInterviewMaterial ? 'この講師は高度な分析機能を使用できます' : 'この講師は高度な分析機能を使用できません'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${selectedInstructor.isAdmin ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                        {selectedInstructor.isAdmin ? '✓' : '✕'}
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-slate-800">管理者権限（準管理者）</p>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          {selectedInstructor.isAdmin ? 'この講師はシステム設定以外の管理機能を使用できます' : 'この講師は一般講師権限です'}
                         </p>
                       </div>
                     </div>
@@ -412,6 +481,71 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
           )}
         </div>
       </div>
+    ) : (
+      <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden animate-slideUp">
+          <div className="p-8 md:p-10 bg-indigo-600 text-white">
+            <h3 className="text-2xl font-black italic tracking-tighter">INTERVIEW STATISTICS</h3>
+            <p className="text-indigo-100 font-bold text-xs uppercase tracking-widest mt-1">講師別面談実施件数</p>
+          </div>
+          
+          <div className="p-8 md:p-10 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">開始日</label>
+                <input 
+                  type="date" 
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-5 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">終了日</label>
+                <input 
+                  type="date" 
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-5 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-4">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">講師名</span>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">実施件数</span>
+              </div>
+              <div className="space-y-2">
+                {interviewStats.map((stat, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-6 bg-white border border-slate-100 rounded-2xl hover:border-indigo-200 transition-all group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center font-black group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                        {stat.name[0]}
+                      </div>
+                      <span className="font-bold text-slate-700">{stat.name} 講師</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 w-24 bg-slate-100 rounded-full overflow-hidden hidden md:block">
+                        <div 
+                          className="h-full bg-indigo-500 rounded-full" 
+                          style={{ width: `${Math.min(100, (stat.count / (Math.max(...interviewStats.map(s => s.count)) || 1)) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-2xl font-black text-indigo-600 w-12 text-right">{stat.count}</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase">件</span>
+                    </div>
+                  </div>
+                ))}
+                {interviewStats.length === 0 && (
+                  <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl text-slate-400 italic">
+                    講師データがありません
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 新規講師登録モーダル */}
       {showAddModal && (
@@ -484,6 +618,19 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
                   <div className="flex-1">
                     <p className="font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">面談資料作成権限を付与</p>
                     <p className="text-[10px] text-slate-400 font-medium">登録と同時に高度な分析機能の使用を許可します</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-indigo-50 transition-colors group border-2 border-transparent hover:border-indigo-100">
+                  <input 
+                    type="checkbox" 
+                    checked={addFormData.isAdmin}
+                    onChange={(e) => setAddFormData({...addFormData, isAdmin: e.target.checked})}
+                    className="w-6 h-6 rounded-lg border-2 border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">管理者権限を付与</p>
+                    <p className="text-[10px] text-slate-400 font-medium">システム設定以外の管理機能へのアクセスを許可します</p>
                   </div>
                 </label>
               </div>
