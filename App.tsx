@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult, InterviewSlot, InterviewRecord, GroupLessonLog } from './types';
+import { UserRole, Report, MockExam, Student, Instructor, TimetableEntry, StudySession, AdminConfig, ReportMessage, IQResult, InterviewSlot, InterviewRecord, GroupLessonLog, SeasonalCourse, SeasonalSlot } from './types';
 import { MOCK_STUDENTS, MOCK_INSTRUCTORS, MOCK_REPORTS, MOCK_TIMETABLE } from './constants';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { generateUniqueId, getLocalISOString, parseSafeDate } from './utils';
@@ -22,6 +22,8 @@ import InstructorCenter from './components/InstructorCenter';
 import AccountSettings from './components/AccountSettings';
 import StudentSettings from './components/StudentSettings';
 import { InterviewManagement } from './components/InterviewManagement';
+import { SeasonalCourseManager } from './components/SeasonalCourseManager';
+import { SeasonalReservation } from './components/SeasonalReservation';
 
 export { getLocalISOString, parseSafeDate };
 
@@ -73,6 +75,16 @@ const App: React.FC = () => {
   const [interviewSlots, setInterviewSlots] = useState<InterviewSlot[]>([]);
   const [interviewRecords, setInterviewRecords] = useState<InterviewRecord[]>([]);
   const [groupLessonLogs, setGroupLessonLogs] = useState<GroupLessonLog[]>([]);
+  const [seasonalCourses, setSeasonalCourses] = useState<SeasonalCourse[]>([]);
+  const [seasonalSlots, setSeasonalSlots] = useState<SeasonalSlot[]>([]);
+
+  const isSeasonalVisible = useMemo(() => {
+    if (currentUser.role === 'admin' || currentUser.isAdmin) return true;
+    if (currentUser.role === 'instructor') {
+      return seasonalCourses.some(c => c.visibility === 'all' || c.visibility === 'instructor');
+    }
+    return seasonalCourses.some(c => c.visibility === 'all');
+  }, [seasonalCourses, currentUser.role, currentUser.isAdmin]);
 
   // 管理者を含めた全講師リスト（選択用）
   const allInstructors = useMemo(() => {
@@ -160,8 +172,10 @@ const App: React.FC = () => {
       localStorage.setItem('sb_data_interview_slots', JSON.stringify(interviewSlots));
       localStorage.setItem('sb_data_interview_records', JSON.stringify(interviewRecords));
       localStorage.setItem('sb_data_group_lesson_logs', JSON.stringify(groupLessonLogs));
+      localStorage.setItem('sb_data_seasonal_courses', JSON.stringify(seasonalCourses));
+      localStorage.setItem('sb_data_seasonal_slots', JSON.stringify(seasonalSlots));
     }
-  }, [students, instructors, reports, mockExams, allSessions, timetable, adminConfig, interviewSlots, interviewRecords, groupLessonLogs]);
+  }, [students, instructors, reports, mockExams, allSessions, timetable, adminConfig, interviewSlots, interviewRecords, groupLessonLogs, seasonalCourses, seasonalSlots]);
 
   const isUpdatingRef = useRef<boolean>(false);
   const isFetchingRef = useRef<boolean>(false);
@@ -190,6 +204,8 @@ const App: React.FC = () => {
         const localSlots = localStorage.getItem('sb_data_interview_slots');
         const localRecords = localStorage.getItem('sb_data_interview_records');
         const localGroupLogs = localStorage.getItem('sb_data_group_lesson_logs');
+        const localSeasonalCourses = localStorage.getItem('sb_data_seasonal_courses');
+        const localSeasonalSlots = localStorage.getItem('sb_data_seasonal_slots');
         const localTimetable = localStorage.getItem('sb_data_timetable');
         const savedAdmin = localStorage.getItem('study_base_admin_config');
 
@@ -199,6 +215,8 @@ const App: React.FC = () => {
         setInterviewSlots(localSlots ? JSON.parse(localSlots) : []);
         setInterviewRecords(localRecords ? JSON.parse(localRecords) : []);
         setGroupLessonLogs(localGroupLogs ? JSON.parse(localGroupLogs) : []);
+        setSeasonalCourses(localSeasonalCourses ? JSON.parse(localSeasonalCourses) : []);
+        setSeasonalSlots(localSeasonalSlots ? JSON.parse(localSeasonalSlots) : []);
         setTimetable(localTimetable ? JSON.parse(localTimetable) : MOCK_TIMETABLE);
         if (savedAdmin) setAdminConfig(JSON.parse(savedAdmin));
         setIsLoading(false);
@@ -218,7 +236,9 @@ const App: React.FC = () => {
         { data: sessionData, error: sessionError },
         { data: slotsData, error: slotsError },
         { data: recordsData, error: recordsError },
-        { data: groupLogData, error: groupLogError }
+        { data: groupLogData, error: groupLogError },
+        { data: seasonalCourseData, error: seasonalCourseError },
+        { data: seasonalSlotData, error: seasonalSlotError }
       ] = await Promise.all([
         supabase.from('admin_config').select('*').eq('id', 1).maybeSingle(),
         supabase.from('students').select('*'),
@@ -229,7 +249,9 @@ const App: React.FC = () => {
         supabase.from('study_sessions').select('*').order('date', { ascending: false }),
         supabase.from('interview_slots').select('*'),
         supabase.from('interview_records').select('*'),
-        supabase.from('group_lesson_logs').select('*')
+        supabase.from('group_lesson_logs').select('*'),
+        supabase.from('seasonal_courses').select('*'),
+        supabase.from('seasonal_slots').select('*')
       ]);
 
       // PGRST204 (Column not found) や PGRST205 (Table not found) は無視して空配列として扱う
@@ -239,12 +261,15 @@ const App: React.FC = () => {
       const filteredSlotsError = isNotFoundError(slotsError) ? null : slotsError;
       const filteredRecordsError = isNotFoundError(recordsError) ? null : recordsError;
       const filteredGroupLogError = isNotFoundError(groupLogError) ? null : groupLogError;
+      const filteredSeasonalCourseError = isNotFoundError(seasonalCourseError) ? null : seasonalCourseError;
+      const filteredSeasonalSlotError = isNotFoundError(seasonalSlotError) ? null : seasonalSlotError;
 
-      if (adminError || studentError || instructorError || reportError || mockError || filteredTimetableError || sessionError || filteredSlotsError || filteredRecordsError || filteredGroupLogError) {
+      if (adminError || studentError || instructorError || reportError || mockError || filteredTimetableError || sessionError || filteredSlotsError || filteredRecordsError || filteredGroupLogError || filteredSeasonalCourseError || filteredSeasonalSlotError) {
         const firstError = adminError || studentError || instructorError || reportError || filteredTimetableError;
         console.error("[Sync] CRITICAL ERROR:", { 
           adminError, studentError, instructorError, reportError, mockError, timetableError, sessionError, 
-          slotsError: filteredSlotsError, recordsError: filteredRecordsError, groupLogError: filteredGroupLogError
+          slotsError: filteredSlotsError, recordsError: filteredRecordsError, groupLogError: filteredGroupLogError,
+          seasonalCourseError: filteredSeasonalCourseError, seasonalSlotError: filteredSeasonalSlotError
         });
         if (!isSilent) showToast(`データ取得エラー: ${firstError?.message || '権限エラーまたはテーブル未定義'}`, 'error');
       } else {
@@ -434,6 +459,35 @@ const App: React.FC = () => {
           homework: g.homework, 
           pdfUrl: g.pdf_url ?? g.pdfUrl, 
           pdfName: g.pdf_name ?? g.pdfName
+        })));
+      }
+
+      if (seasonalCourseData) {
+        setSeasonalCourses(seasonalCourseData.map((c: any) => ({
+          id: String(c.id),
+          title: c.title,
+          startDate: (c.start_date ?? c.startDate) ? String(c.start_date ?? c.startDate).split('T')[0] : '',
+          endDate: (c.end_date ?? c.endDate) ? String(c.end_date ?? c.endDate).split('T')[0] : '',
+          regularClassPattern: c.regular_class_pattern ?? c.regularClassPattern ?? 'continue',
+          description: c.description,
+          reservationDeadline: c.reservation_deadline ?? c.reservationDeadline,
+          visibility: c.visibility ?? (c.is_visible || c.isVisible ? 'all' : 'hidden')
+        })));
+      }
+
+      if (seasonalSlotData) {
+        setSeasonalSlots(seasonalSlotData.map((s: any) => ({
+          id: String(s.id),
+          courseId: String(s.course_id ?? s.courseId),
+          instructorId: String(s.instructor_id ?? s.instructorId),
+          instructorName: s.instructor_name ?? s.instructorName,
+          date: String(s.date).split('T')[0],
+          startTime: s.start_time ?? s.startTime,
+          endTime: s.end_time ?? s.endTime,
+          studentId: s.student_id ?? s.studentId ? String(s.student_id ?? s.studentId) : undefined,
+          studentName: s.student_name ?? s.studentName,
+          subject: s.subject,
+          status: s.status ?? 'available'
         })));
       }
 
@@ -1161,6 +1215,59 @@ const App: React.FC = () => {
     } finally { endUpdate(); }
   };
 
+  const handleUpdateSeasonalCourses = async (newCourses: SeasonalCourse[], deletedIds?: string[]) => {
+    startUpdate();
+    const prevCourses = [...seasonalCourses];
+    try {
+      setSeasonalCourses(newCourses);
+      if (isSupabaseConfigured && supabase) {
+        if (deletedIds && deletedIds.length > 0) {
+          await supabase.from('seasonal_courses').delete().in('id', deletedIds);
+        }
+        const upsertData = newCourses.map(c => ({
+          id: c.id, title: c.title, start_date: c.startDate, end_date: c.endDate,
+          regular_class_pattern: c.regularClassPattern, description: c.description,
+          reservation_deadline: c.reservationDeadline, visibility: c.visibility || 'hidden'
+        }));
+        if (upsertData.length > 0) {
+          await supabase.from('seasonal_courses').upsert(upsertData, { onConflict: 'id' });
+        }
+      }
+      showToast('季節特別講習設定を更新しました');
+    } catch (err: any) {
+      console.error('[Seasonal] Course update error:', err);
+      setSeasonalCourses(prevCourses);
+      showToast('更新に失敗しました', 'error');
+    } finally { endUpdate(); }
+  };
+
+  const handleUpdateSeasonalSlots = async (newSlots: SeasonalSlot[], deletedIds?: string[]) => {
+    startUpdate();
+    const prevSlots = [...seasonalSlots];
+    try {
+      setSeasonalSlots(newSlots);
+      if (isSupabaseConfigured && supabase) {
+        if (deletedIds && deletedIds.length > 0) {
+          await supabase.from('seasonal_slots').delete().in('id', deletedIds);
+        }
+        const upsertData = newSlots.map(s => ({
+          id: s.id, course_id: s.courseId, instructor_id: s.instructorId,
+          instructor_name: s.instructorName, date: s.date, start_time: s.startTime,
+          end_time: s.endTime, student_id: s.studentId || null, student_name: s.studentName || null,
+          subject: s.subject || null, status: s.status
+        }));
+        if (upsertData.length > 0) {
+          await supabase.from('seasonal_slots').upsert(upsertData, { onConflict: 'id' });
+        }
+      }
+      showToast('季節講習予約を更新しました');
+    } catch (err: any) {
+      console.error('[Seasonal] Slot update error:', err);
+      setSeasonalSlots(prevSlots);
+      showToast('更新に失敗しました', 'error');
+    } finally { endUpdate(); }
+  };
+
   const renderContent = () => {
     const activeStudent = students.find(s => s.id === currentUser.id);
     switch (activeTab) {
@@ -1248,6 +1355,31 @@ const App: React.FC = () => {
           students={students}
           onUpdateLogs={handleUpdateGroupLessonLogs} 
         />;
+      case 'seasonal-course':
+        const visibleCoursesForManager = currentUser.role === 'admin' || currentUser.isAdmin
+          ? seasonalCourses
+          : seasonalCourses.filter(c => c.visibility === 'all' || c.visibility === 'instructor');
+        return (
+          <SeasonalCourseManager 
+            seasonalCourses={visibleCoursesForManager}
+            seasonalSlots={seasonalSlots}
+            instructors={allInstructors}
+            students={students}
+            currentUser={currentUser}
+            onUpdateCourses={handleUpdateSeasonalCourses}
+            onUpdateSlots={handleUpdateSeasonalSlots}
+          />
+        );
+      case 'seasonal-reservation':
+        return (
+          <SeasonalReservation 
+            seasonalCourses={seasonalCourses.filter(c => c.visibility === 'all')}
+            seasonalSlots={seasonalSlots}
+            student={activeStudent!}
+            instructors={allInstructors}
+            onUpdateSlots={(newSlots) => handleUpdateSeasonalSlots(newSlots)}
+          />
+        );
       case 'messages': return <MessageCenter reports={reports} students={students} currentUser={currentUser} onAddMessage={handleAddReportMessage} onDeleteMessage={handleDeleteReportMessage} onMarkResolved={(rid) => { handleUpdateReport(rid, { needsAction: false }); showToast('相談を解決済みにしました'); }} onUpdateReport={handleUpdateReport} onDeleteReport={handleDeleteReport} />;
       case 'timetable': return <TimetableManager timetable={timetable} students={students} instructors={allInstructors} onUpdate={handleUpdateTimetable} />;
       case 'settings': 
@@ -1329,6 +1461,7 @@ const App: React.FC = () => {
       reports={reports}
       isCloudConnected={isSupabaseConfigured}
       isPrivilegedInstructor={currentUser.isAdmin}
+      isSeasonalVisible={isSeasonalVisible}
     >
       {renderContent()}
       

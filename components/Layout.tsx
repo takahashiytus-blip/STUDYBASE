@@ -13,9 +13,10 @@ interface LayoutProps {
   reports: Report[];
   isCloudConnected?: boolean;
   isPrivilegedInstructor?: boolean;
+  isSeasonalVisible?: boolean; // 季節講習の表示フラグ
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, activeTab, setActiveTab, reports, isCloudConnected, isPrivilegedInstructor }) => {
+const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, activeTab, setActiveTab, reports, isCloudConnected, isPrivilegedInstructor, isSeasonalVisible }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isPrivileged = role === 'instructor' || role === 'admin';
   const isAdmin = role === 'admin';
@@ -38,6 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         { id: 'interview', label: '面談資料AI', icon: '🤝' },
         { id: 'mock', label: '模試成績', icon: '🏆' },
         { id: 'group-lessons', label: '集団授業管理', icon: '🏫' },
+        ...(isAdmin || isSeasonalVisible ? [{ id: 'seasonal-course', label: '季節特別講習管理', icon: '🗓️' }] : []),
         { id: 'messages', label: 'リクエスト', icon: '💬', badge: reportsWithAction },
         { id: 'students', label: '生徒管理', icon: '👥' },
         ...(isAdmin ? [{ id: 'settings', label: 'システム設定', icon: '⚙️' }] : []),
@@ -51,6 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         ] : []),
         { id: 'reports', label: '指導報告書', icon: '📄' },
         { id: 'interview-management', label: '面談予約', icon: '📅' },
+        ...(isSeasonalVisible ? [{ id: 'seasonal-reservation', label: '季節講習予約', icon: '✍️' }] : []),
         { id: 'mock', label: '模試成績', icon: '🏆' },
         { id: 'settings', label: '設定', icon: '⚙️' },
       ];

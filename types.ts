@@ -198,4 +198,33 @@ export interface AppState {
   adminConfig: AdminConfig;
   interviewSlots: InterviewSlot[];
   interviewRecords: InterviewRecord[];
+  seasonalCourses: SeasonalCourse[];
+  seasonalSlots: SeasonalSlot[];
+}
+
+export type SeasonalVisibility = 'all' | 'instructor' | 'hidden';
+
+export interface SeasonalCourse {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  regularClassPattern: 'continue' | 'suspend';
+  description?: string;
+  reservationDeadline?: string; // 予約締め切り日時 (ISO string or YYYY-MM-DD HH:mm)
+  visibility?: SeasonalVisibility; // 表示対象: 'all' (生徒・講師), 'instructor' (講師のみ), 'hidden' (非表示)
+}
+
+export interface SeasonalSlot {
+  id: string;
+  courseId: string;
+  instructorId: string;
+  instructorName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  studentId?: string;
+  studentName?: string;
+  subject?: string;
+  status: 'available' | 'booked';
 }

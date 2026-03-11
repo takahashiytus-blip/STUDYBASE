@@ -501,8 +501,8 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
 
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
-            <div className="bg-indigo-600 p-8 text-white"><h3 className="text-xl font-black">新規生徒登録</h3></div>
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[90vh]">
+            <div className="bg-indigo-600 p-8 text-white flex-shrink-0"><h3 className="text-xl font-black">新規生徒登録</h3></div>
             <form onSubmit={e => {
               e.preventDefault();
               const target = e.target as any;
@@ -515,7 +515,7 @@ export const StudentCenter: React.FC<StudentCenterProps> = ({
                 targetSchool: target.targetSchool.value
               });
               setShowAddModal(false);
-            }} className="p-8 space-y-4">
+            }} className="p-8 space-y-4 overflow-y-auto flex-1">
               <input name="name" placeholder="氏名" required className={inputStyle} />
               <input name="grade" placeholder="学年" required className={inputStyle} />
               <input name="targetSchool" placeholder="志望校" className={inputStyle} />

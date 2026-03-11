@@ -30,6 +30,9 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
   const [slotDate, setSlotDate] = useState(getLocalISOString().split('T')[0]);
   const [slotStart, setSlotStart] = useState('18:00');
   const [slotEnd, setSlotEnd] = useState('18:30');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringDays, setRecurringDays] = useState<number[]>([]);
+  const [recurringEndDate, setRecurringEndDate] = useState(getLocalISOString().split('T')[0]);
 
   // Record Form State
   const [recordSid, setRecordSid] = useState('');
@@ -42,18 +45,76 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
   const isInstructor = currentUser.role === 'instructor';
   const isParent = currentUser.role === 'student' || currentUser.role === 'parent';
 
+  const DAYS = [
+    { label: '日', value: 0 },
+    { label: '月', value: 1 },
+    { label: '火', value: 2 },
+    { label: '水', value: 3 },
+    { label: '木', value: 4 },
+    { label: '金', value: 5 },
+    { label: '土', value: 6 },
+  ];
+
   const handleAddSlot = () => {
-    const newSlot: InterviewSlot = {
-      id: generateUniqueId('islot'),
-      interviewerId: currentUser.id,
-      interviewerName: currentUser.name,
-      date: slotDate,
-      startTime: slotStart,
-      endTime: slotEnd,
-      status: 'available'
-    };
-    onUpdateSlots([...slots, newSlot]);
+    if (isRecurring) {
+      if (recurringDays.length === 0) {
+        alert('反復する曜日を選択してください。');
+        return;
+      }
+      
+      const newSlots: InterviewSlot[] = [];
+      const startParts = slotDate.split('-').map(Number);
+      const endParts = recurringEndDate.split('-').map(Number);
+      
+      let current = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+      const end = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+      
+      if (end < current) {
+        alert('終了日は開始日以降に設定してください。');
+        return;
+      }
+
+      while (current <= end) {
+        if (recurringDays.includes(current.getDay())) {
+          const y = current.getFullYear();
+          const m = String(current.getMonth() + 1).padStart(2, '0');
+          const d = String(current.getDate()).padStart(2, '0');
+          const dateStr = `${y}-${m}-${d}`;
+          
+          newSlots.push({
+            id: generateUniqueId('islot'),
+            interviewerId: currentUser.id,
+            interviewerName: currentUser.name,
+            date: dateStr,
+            startTime: slotStart,
+            endTime: slotEnd,
+            status: 'available'
+          });
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      if (newSlots.length === 0) {
+        alert('選択された期間内に該当する曜日はありません。');
+        return;
+      }
+
+      onUpdateSlots([...slots, ...newSlots]);
+    } else {
+      const newSlot: InterviewSlot = {
+        id: generateUniqueId('islot'),
+        interviewerId: currentUser.id,
+        interviewerName: currentUser.name,
+        date: slotDate,
+        startTime: slotStart,
+        endTime: slotEnd,
+        status: 'available'
+      };
+      onUpdateSlots([...slots, newSlot]);
+    }
     setIsAddingSlot(false);
+    setIsRecurring(false);
+    setRecurringDays([]);
   };
 
   const handleBookSlot = (slotId: string) => {
@@ -159,20 +220,71 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
               </div>
               
               {isAddingSlot && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end animate-slideDown bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">日付</label>
-                    <input type="date" value={slotDate} onChange={e => setSlotDate(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500" />
+                <div className="space-y-6 animate-slideDown bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                  <div className="flex items-center gap-4 mb-2">
+                    <button 
+                      onClick={() => setIsRecurring(false)} 
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${!isRecurring ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}
+                    >
+                      単発
+                    </button>
+                    <button 
+                      onClick={() => setIsRecurring(true)} 
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${isRecurring ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}
+                    >
+                      反復設定
+                    </button>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">開始</label>
-                    <input type="time" value={slotStart} onChange={e => setSlotStart(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500" />
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">{isRecurring ? '開始日' : '日付'}</label>
+                      <input type="date" value={slotDate} onChange={e => setSlotDate(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500" />
+                    </div>
+                    {isRecurring && (
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">終了日</label>
+                        <input type="date" value={recurringEndDate} onChange={e => setRecurringEndDate(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">開始</label>
+                      <input type="time" value={slotStart} onChange={e => setSlotStart(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">終了</label>
+                      <input type="time" value={slotEnd} onChange={e => setSlotEnd(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">終了</label>
-                    <input type="time" value={slotEnd} onChange={e => setSlotEnd(e.target.value)} className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 font-bold outline-none focus:border-indigo-500" />
-                  </div>
-                  <button onClick={handleAddSlot} className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black shadow-lg">登録する</button>
+
+                  {isRecurring && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">反復する曜日</label>
+                      <div className="flex flex-wrap gap-2">
+                        {DAYS.map(day => (
+                          <button
+                            key={day.value}
+                            onClick={() => {
+                              if (recurringDays.includes(day.value)) {
+                                setRecurringDays(recurringDays.filter(d => d !== day.value));
+                              } else {
+                                setRecurringDays([...recurringDays, day.value]);
+                              }
+                            }}
+                            className={`w-10 h-10 rounded-xl font-black text-sm transition-all ${
+                              recurringDays.includes(day.value) ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 border-2 border-slate-100'
+                            }`}
+                          >
+                            {day.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={handleAddSlot} className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black shadow-lg">
+                    {isRecurring ? '一括登録する' : '登録する'}
+                  </button>
                 </div>
               )}
             </div>
@@ -390,14 +502,14 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
                             <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
                               <p className="text-[9px] font-black text-indigo-600 uppercase mb-2">推奨校（公立/私立）</p>
                               <div className="space-y-2">
-                                <p className="text-[10px] font-bold text-slate-600">公立: {record.aiMaterial.suggestedSchools.public.challenge.join(', ')} / {record.aiMaterial.suggestedSchools.public.realistic.join(', ')}</p>
-                                <p className="text-[10px] font-bold text-slate-600">私立: {record.aiMaterial.suggestedSchools.private.challenge.join(', ')} / {record.aiMaterial.suggestedSchools.private.solid.join(', ')}</p>
+                                <p className="text-[10px] font-bold text-slate-600">公立: {(record.aiMaterial.suggestedSchools?.public?.challenge || []).join(', ')} / {(record.aiMaterial.suggestedSchools?.public?.realistic || []).join(', ')}</p>
+                                <p className="text-[10px] font-bold text-slate-600">私立: {(record.aiMaterial.suggestedSchools?.private?.challenge || []).join(', ')} / {(record.aiMaterial.suggestedSchools?.private?.solid || []).join(', ')}</p>
                               </div>
                             </div>
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                               <p className="text-[9px] font-black text-slate-600 uppercase mb-2">推奨学習時間</p>
                               <div className="flex flex-wrap gap-2">
-                                {record.aiMaterial.requiredStudyHours.subjectBreakdown.map((s, idx) => (
+                                {(record.aiMaterial.requiredStudyHours?.subjectBreakdown || []).map((s, idx) => (
                                   <span key={idx} className="px-2 py-1 bg-white rounded-lg text-[10px] font-bold border border-slate-200">
                                     {s.subject}: {s.hours}h
                                   </span>

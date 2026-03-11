@@ -550,7 +550,7 @@ const InstructorCenter: React.FC<InstructorCenterProps> = ({
       {/* 新規講師登録モーダル */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4 md:p-6 animate-fadeIn">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp flex flex-col">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[90vh]">
             <div className="bg-indigo-600 p-8 text-white relative shrink-0">
               <h3 className="text-xl font-black">新規講師登録</h3>
               <p className="text-indigo-100 text-xs mt-1 font-bold">基本情報とログイン権限を設定します</p>
