@@ -1010,7 +1010,8 @@ const App: React.FC = () => {
       if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.from('instructors').insert({ 
           id, name: d.name, specialty: d.specialty, login_id: d.loginId, password: d.password,
-          can_generate_interview_material: d.canGenerateInterviewMaterial || false
+          can_generate_interview_material: d.canGenerateInterviewMaterial || false,
+          is_admin: d.isAdmin || false
         });
         if (error) {
           console.error("[Instructor] Supabase Insert Error Details:", error);
@@ -1040,6 +1041,7 @@ const App: React.FC = () => {
         if (upd.loginId !== undefined) dbUpd.login_id = upd.loginId;
         if (upd.password !== undefined) dbUpd.password = upd.password;
         if (upd.canGenerateInterviewMaterial !== undefined) dbUpd.can_generate_interview_material = upd.canGenerateInterviewMaterial;
+        if (upd.isAdmin !== undefined) dbUpd.is_admin = upd.isAdmin;
         
         if (Object.keys(dbUpd).length > 0) {
           const { error } = await supabase.from('instructors').update(dbUpd).eq('id', id);

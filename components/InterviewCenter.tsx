@@ -31,10 +31,12 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [material, setMaterial] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSaveToCloud = async () => {
     if (!material || !selectedSid) return;
     setIsSaving(true);
+    setError(null);
     try {
       const newRecord: InterviewRecord = {
         id: `irec-ai-${Date.now()}`,
@@ -48,7 +50,7 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({
       await onSaveRecord(newRecord);
       alert("面談資料をクラウドに保存しました。面談予約・記録タブから過去分を確認できます。");
     } catch (e) {
-      alert("保存に失敗しました。");
+      setError("保存に失敗しました。時間をおいて再度お試しください。");
     } finally {
       setIsSaving(false);
     }
@@ -57,6 +59,7 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({
   const handleGenerate = async () => {
     if (!selectedSid) return;
     setIsGenerating(true);
+    setError(null);
     try {
       const student = students.find(s => s.id === selectedSid)!;
       const studentReports = reports.filter(r => r.studentId === selectedSid).slice(0, 5);
@@ -70,7 +73,7 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({
       );
       setMaterial(result);
     } catch (e) {
-      alert("面談資料の生成に失敗しました。");
+      setError("面談資料の生成に失敗しました。AIモデルの制限またはネットワークエラーの可能性があります。");
     } finally {
       setIsGenerating(false);
     }
@@ -84,6 +87,17 @@ export const InterviewCenter: React.FC<InterviewCenterProps> = ({
         <h2 className="text-3xl font-black text-slate-800 tracking-tight">面談資料AI統合生成</h2>
         <p className="text-slate-500 font-medium">生徒の成績と指導履歴を統合解析し、プロフェッショナルな面談を支援します</p>
       </header>
+
+      {error && (
+        <div className="p-6 bg-rose-50 border-2 border-rose-100 rounded-[2rem] flex items-center gap-4 animate-fadeIn">
+          <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl shrink-0">⚠️</div>
+          <div className="flex-1">
+            <p className="font-black text-rose-900">エラーが発生しました</p>
+            <p className="text-xs font-bold text-rose-700">{error}</p>
+          </div>
+          <button onClick={() => setError(null)} className="text-rose-400 hover:text-rose-600 font-black text-xl px-2">×</button>
+        </div>
+      )}
 
       {/* 入力エリアのクリーン化 */}
       <div className="bg-white p-8 md:p-10 rounded-[3rem] border-2 border-slate-100 shadow-xl flex flex-col md:flex-row items-end gap-6">

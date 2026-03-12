@@ -23,6 +23,7 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
   onUpdateRecords
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'slots' | 'records'>('slots');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const [isAddingSlot, setIsAddingSlot] = useState(false);
   const [isAddingRecord, setIsAddingRecord] = useState(false);
 
@@ -133,14 +134,66 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
     alert('面談を予約しました。教室からの確定をお待ちください。');
   };
 
+  const handleCancelBooking = (slotId: string) => {
+    const slot = slots.find(s => s.id === slotId);
+    if (!slot) return;
+
+    const updatedSlot: InterviewSlot = {
+      ...slot,
+      status: 'available',
+      studentId: undefined,
+      studentName: undefined,
+      parentName: undefined
+    };
+    onUpdateSlots(slots.map(s => s.id === slotId ? updatedSlot : s));
+    alert('予約を取り消しました。');
+  };
+
   const [deletingSlotId, setDeletingSlotId] = useState<string | null>(null);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  // Calendar State
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const weekDates = useMemo(() => {
+    const start = new Date(currentDate);
+    const day = start.getDay();
+    const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+    const monday = new Date(start.setDate(diff));
+    
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d.toISOString().split('T')[0];
+    });
+  }, [currentDate]);
+
+  const handlePrevWeek = () => {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() - 7);
+    setCurrentDate(d);
+  };
+
+  const handleNextWeek = () => {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() + 7);
+    setCurrentDate(d);
+  };
+
+  const handleToday = () => setCurrentDate(new Date());
 
   const handleConfirmSlot = (slotId: string) => {
     const slot = slots.find(s => s.id === slotId);
     if (!slot) return;
     onUpdateSlots(slots.map(s => s.id === slotId ? { ...slot, status: 'confirmed' } : s));
     alert('面談日程を確定しました。通知を送信しました（シミュレーション）。');
+  };
+
+  const handleBulkDeleteSlots = () => {
+    const idsToDelete = slots.map(s => s.id);
+    onUpdateSlots([], idsToDelete);
+    setShowBulkDeleteConfirm(false);
   };
 
   const handleDeleteSlot = (id: string) => {
@@ -210,13 +263,53 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
 
       {activeSubTab === 'slots' ? (
         <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              <button 
+                onClick={() => setViewMode('calendar')} 
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'calendar' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                Calendar
+              </button>
+              <button 
+                onClick={() => setViewMode('list')} 
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                List
+              </button>
+            </div>
+            
+            {viewMode === 'calendar' && (
+              <div className="flex items-center gap-4">
+                <button onClick={handleToday} className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-slate-50">今日</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={handlePrevWeek} className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-600">＜</button>
+                  <span className="text-sm font-black text-slate-700 min-w-[120px] text-center">
+                    {weekDates[0].replace(/-/g, '/')} 〜 {weekDates[6].split('-').slice(1).join('/')}
+                  </span>
+                  <button onClick={handleNextWeek} className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-600">＞</button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {(isAdmin || isInstructor) && (
             <div className="bg-white p-8 rounded-[2.5rem] border-2 border-slate-100 shadow-xl">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black flex items-center gap-2"><span>📅</span> 空き時間の登録</h3>
-                <button onClick={() => setIsAddingSlot(!isAddingSlot)} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-lg hover:bg-indigo-700 transition-all">
-                  {isAddingSlot ? '閉じる' : '新規枠を追加'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {slots.length > 0 && (
+                    <button 
+                      onClick={() => setShowBulkDeleteConfirm(true)} 
+                      className="px-6 py-2 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl font-black text-sm shadow-sm hover:bg-rose-600 hover:text-white transition-all"
+                    >
+                      全枠削除
+                    </button>
+                  )}
+                  <button onClick={() => setIsAddingSlot(!isAddingSlot)} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-black text-sm shadow-lg hover:bg-indigo-700 transition-all">
+                    {isAddingSlot ? '閉じる' : '新規枠を追加'}
+                  </button>
+                </div>
               </div>
               
               {isAddingSlot && (
@@ -290,83 +383,149 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedSlots.map(slot => (
-              <div key={slot.id} className={`p-6 rounded-[2.5rem] border-2 transition-all shadow-sm ${
-                slot.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100' : 
-                slot.status === 'booked' ? 'bg-amber-50 border-amber-100' : 'bg-white border-slate-100'
-              }`}>
-                <div className="flex justify-between items-start mb-4">
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                    slot.status === 'confirmed' ? 'bg-emerald-500 text-white' : 
-                    slot.status === 'booked' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'
-                  }`}>
-                    {slot.status === 'confirmed' ? '確定済み' : slot.status === 'booked' ? '予約あり' : '受付中'}
-                  </span>
-                  <span className="text-xs font-black text-slate-400">{slot.date}</span>
-                </div>
-                
-                <div className="mb-6 relative group/slot">
-                  {(isAdmin || isInstructor) && (
-                    <>
-                      {deletingSlotId !== slot.id ? (
-                        <button 
-                          onClick={() => setDeletingSlotId(slot.id)}
-                          className="absolute -top-2 -right-2 w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center opacity-0 group-hover/slot:opacity-100 transition-all hover:bg-rose-500 hover:text-white z-10"
-                          title="枠を削除"
-                        >
-                          ✕
-                        </button>
-                      ) : (
-                        <div className="absolute -top-2 -right-2 flex items-center gap-1 bg-rose-600 p-1 rounded-lg shadow-xl z-20 animate-scaleIn">
+          {viewMode === 'list' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sortedSlots.map(slot => (
+                <div key={slot.id} className={`p-6 rounded-[2.5rem] border-2 transition-all shadow-sm ${
+                  slot.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100' : 
+                  slot.status === 'booked' ? 'bg-amber-50 border-amber-100' : 'bg-white border-slate-100'
+                }`}>
+                  <div className="flex justify-between items-start mb-4">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                      slot.status === 'confirmed' ? 'bg-emerald-500 text-white' : 
+                      slot.status === 'booked' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'
+                    }`}>
+                      {slot.status === 'confirmed' ? '確定済み' : slot.status === 'booked' ? '予約あり' : '受付中'}
+                    </span>
+                    <span className="text-xs font-black text-slate-400">{slot.date}</span>
+                  </div>
+                  
+                  <div className="mb-6 relative group/slot">
+                    {(isAdmin || isInstructor) && (
+                      <>
+                        {deletingSlotId !== slot.id ? (
                           <button 
-                            onClick={() => handleDeleteSlot(slot.id)}
-                            className="bg-white text-rose-600 px-2 py-1 rounded text-[10px] font-black hover:bg-rose-50 transition-colors"
+                            onClick={() => setDeletingSlotId(slot.id)}
+                            className="absolute -top-2 -right-2 w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center opacity-0 group-hover/slot:opacity-100 transition-all hover:bg-rose-500 hover:text-white z-10"
+                            title="枠を削除"
                           >
-                            削除
+                            ✕
                           </button>
-                          <button 
-                            onClick={() => setDeletingSlotId(null)}
-                            className="bg-rose-700 text-white px-2 py-1 rounded text-[10px] font-black hover:bg-rose-800 transition-colors"
-                          >
-                            止める
-                          </button>
-                        </div>
-                      )}
-                    </>
+                        ) : (
+                          <div className="absolute -top-2 -right-2 flex items-center gap-1 bg-rose-600 p-1 rounded-lg shadow-xl z-20 animate-scaleIn">
+                            <button 
+                              onClick={() => handleDeleteSlot(slot.id)}
+                              className="bg-white text-rose-600 px-2 py-1 rounded text-[10px] font-black hover:bg-rose-50 transition-colors"
+                            >
+                              削除
+                            </button>
+                            <button 
+                              onClick={() => setDeletingSlotId(null)}
+                              className="bg-rose-700 text-white px-2 py-1 rounded text-[10px] font-black hover:bg-rose-800 transition-colors"
+                            >
+                              止める
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <p className="text-2xl font-black text-slate-800">{slot.startTime} <span className="text-sm font-bold text-slate-400">〜</span> {slot.endTime}</p>
+                    <p className="text-xs font-bold text-slate-500 mt-1">担当: {slot.interviewerName}</p>
+                  </div>
+
+                  {slot.status === 'available' && isParent && (
+                    <button onClick={() => handleBookSlot(slot.id)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 transition-all">この枠で予約する</button>
                   )}
-                  <p className="text-2xl font-black text-slate-800">{slot.startTime} <span className="text-sm font-bold text-slate-400">〜</span> {slot.endTime}</p>
-                  <p className="text-xs font-bold text-slate-500 mt-1">担当: {slot.interviewerName}</p>
-                </div>
 
-                {slot.status === 'available' && isParent && (
-                  <button onClick={() => handleBookSlot(slot.id)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg hover:bg-indigo-700 transition-all">この枠で予約する</button>
-                )}
-
-                {slot.status === 'booked' && (isAdmin || isInstructor) && (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-white/50 rounded-xl border border-amber-200">
-                      <p className="text-[10px] font-black text-amber-600 uppercase mb-1">予約者</p>
-                      <p className="text-sm font-black text-slate-700">{slot.studentName} 様 ({slot.parentName} 様)</p>
+                  {slot.status === 'booked' && (isAdmin || isInstructor) && (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-white/50 rounded-xl border border-amber-200">
+                        <p className="text-[10px] font-black text-amber-600 uppercase mb-1">予約者</p>
+                        <p className="text-sm font-black text-slate-700">{slot.studentName} 様 ({slot.parentName} 様)</p>
+                      </div>
+                      <button onClick={() => handleConfirmSlot(slot.id)} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-black shadow-lg hover:bg-emerald-700 transition-all">日程を確定する</button>
                     </div>
-                    <button onClick={() => handleConfirmSlot(slot.id)} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-black shadow-lg hover:bg-emerald-700 transition-all">日程を確定する</button>
-                  </div>
-                )}
+                  )}
 
-                {slot.status === 'confirmed' && (
-                  <div className="p-3 bg-white/50 rounded-xl border border-emerald-200">
-                    <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">参加者</p>
-                    <p className="text-sm font-black text-slate-700">{slot.studentName} 様</p>
-                  </div>
-                )}
+                  {slot.status === 'booked' && slot.studentId === currentUser.id && (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                        <p className="text-[10px] font-black text-amber-600 uppercase mb-1">あなたの予約</p>
+                        <p className="text-sm font-black text-slate-700">教室からの確定待ちです</p>
+                      </div>
+                      <button onClick={() => handleCancelBooking(slot.id)} className="w-full py-3 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl font-black shadow-sm hover:bg-rose-600 hover:text-white transition-all">予約を取り消す</button>
+                    </div>
+                  )}
+
+                  {slot.status === 'confirmed' && (
+                    <div className="p-3 bg-white/50 rounded-xl border border-emerald-200">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">参加者</p>
+                      <p className="text-sm font-black text-slate-700">{slot.studentName} 様</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {sortedSlots.length === 0 && (
+                <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400 font-bold">表示できる面談枠がありません</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 shadow-xl overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-slate-100">
+                {weekDates.map((dateStr, i) => {
+                  const d = new Date(dateStr);
+                  const isToday = dateStr === new Date().toISOString().split('T')[0];
+                  return (
+                    <div key={dateStr} className={`p-4 text-center border-r border-slate-100 last:border-r-0 ${isToday ? 'bg-indigo-50/30' : ''}`}>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{DAYS[d.getDay()].label}</p>
+                      <p className={`text-lg font-black ${isToday ? 'text-indigo-600' : 'text-slate-700'}`}>{d.getDate()}</p>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-            {sortedSlots.length === 0 && (
-              <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-                <p className="text-slate-400 font-bold">表示できる面談枠がありません</p>
+              <div className="grid grid-cols-7 min-h-[400px]">
+                {weekDates.map(dateStr => {
+                  const daySlots = sortedSlots.filter(s => s.date === dateStr);
+                  return (
+                    <div key={dateStr} className="p-2 border-r border-slate-100 last:border-r-0 space-y-2 bg-slate-50/30">
+                      {daySlots.map(slot => (
+                        <div 
+                          key={slot.id} 
+                          className={`p-3 rounded-2xl border shadow-sm transition-all cursor-pointer hover:scale-[1.02] active:scale-95 ${
+                            slot.status === 'confirmed' ? 'bg-emerald-50 border-emerald-200' : 
+                            slot.status === 'booked' ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'
+                          }`}
+                          onClick={() => {
+                            if (slot.status === 'available' && isParent) handleBookSlot(slot.id);
+                            else if (slot.status === 'booked' && slot.studentId === currentUser.id) {
+                              if (window.confirm('予約を取り消しますか？')) handleCancelBooking(slot.id);
+                            }
+                            else if (slot.status === 'booked' && (isAdmin || isInstructor)) handleConfirmSlot(slot.id);
+                          }}
+                        >
+                          <p className="text-[10px] font-black text-slate-800">{slot.startTime}</p>
+                          <p className="text-[8px] font-bold text-slate-400 truncate">{slot.interviewerName}</p>
+                          {slot.status !== 'available' && (
+                            <p className="text-[9px] font-black text-indigo-600 mt-1 truncate">{slot.studentName}</p>
+                          )}
+                          {(isAdmin || isInstructor) && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteSlot(slot.id); }}
+                              className="mt-2 w-full py-1 bg-rose-50 text-rose-500 rounded-lg text-[8px] font-black hover:bg-rose-500 hover:text-white transition-all"
+                            >
+                              削除
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-8">
@@ -529,6 +688,32 @@ export const InterviewManagement: React.FC<InterviewManagementProps> = ({
                 <p className="text-slate-400 font-bold">過去の面談記録はありません</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl animate-scaleIn">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center text-3xl mb-6 mx-auto">⚠️</div>
+            <h3 className="text-2xl font-black text-slate-800 text-center mb-4">面談枠の一括削除</h3>
+            <p className="text-slate-500 text-center font-bold mb-8 leading-relaxed">
+              現在登録されているすべての面談枠（{slots.length}件）を削除します。この操作は取り消せません。本当によろしいですか？
+            </p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black hover:bg-slate-200 transition-all"
+              >
+                キャンセル
+              </button>
+              <button 
+                onClick={handleBulkDeleteSlots}
+                className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black shadow-lg shadow-rose-200 hover:bg-rose-700 transition-all"
+              >
+                削除する
+              </button>
+            </div>
           </div>
         </div>
       )}
