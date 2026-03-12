@@ -98,7 +98,7 @@ const Layout: React.FC<LayoutProps> = ({ children, role, userName, onLogout, act
         fixed md:relative inset-y-0 left-0 w-72 md:w-64 bg-[#0f172a] text-white flex flex-col shrink-0 z-[75] shadow-2xl transition-transform duration-300 ease-in-out pb-[env(safe-area-inset-bottom)]
         ${isMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="p-8 shrink-0 hidden md:flex flex-col items-center justify-center border-b border-white/5 bg-black/20">
+        <div className="p-8 shrink-0 hidden md:flex flex-col items-center justify-center border-b border-white/5">
           <img src="/studybase-logo.svg" alt="StudyBase Logo" className="w-16 h-16 mb-2" />
           <h1 className="text-2xl font-black tracking-tighter text-white uppercase">Study Base</h1>
         </div>
